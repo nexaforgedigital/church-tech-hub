@@ -1,0 +1,24 @@
+{
+  "name": "Church Tech Hub - Worship Lyrics & Resources",
+  "short_name": "Church Tech Hub",
+  "description": "Your one-stop resource for worship lyrics, tech tutorials, and ministry tools",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
