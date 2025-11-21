@@ -13,7 +13,7 @@ export default function Footer() {
                 <path d="M12 2L2 7L12 12L22 7L12 2Z" opacity="0.8"/>
                 <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z"/>
               </svg>
-              Church Tech Hub
+              ChurchAssist
             </h3>
             <p className="text-gray-300 leading-relaxed">
               Empowering worship teams with professional presentation tools, lyrics management, and technical resources.
@@ -49,7 +49,7 @@ export default function Footer() {
               Join our community and stay updated with new features.
             </p>
             <div className="flex gap-3">
-              <a href="#" className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition">
+              <a href="mailto:support@churchassist.in" className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition">
                 <Mail size={20} />
               </a>
               <a href="#" className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition">
@@ -65,7 +65,7 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-gray-400 text-sm">
-            © 2024 Church Tech Hub. Built with <Heart size={14} className="inline text-red-500" /> for worship teams worldwide.
+            © 2024 ChurchAssist. Built with <Heart size={14} className="inline text-red-500" /> for worship teams worldwide.
           </div>
           <div className="flex gap-6 text-sm text-gray-400">
             <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>

@@ -384,6 +384,53 @@ export default function SongPage({ songId }) {
           </div>
         </div>
       </div>
+
+      {/* ⭐ MOBILE CSS FIX - ADD THIS STYLE TAG HERE ⭐ */}
+      <style jsx>{`
+        @media (max-width: 768px) {
+          /* Mobile text size fixes */
+          .text-5xl {
+            font-size: 2rem !important;
+            line-height: 1.2;
+          }
+          
+          .text-xl {
+            font-size: 1.125rem !important;
+          }
+          
+          /* Mobile padding adjustments */
+          .py-12 {
+            padding-top: 2rem !important;
+            padding-bottom: 2rem !important;
+          }
+          
+          .px-4 {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+          }
+          
+          /* Button text size on mobile */
+          .text-sm {
+            font-size: 0.875rem !important;
+          }
+          
+          /* Fix wrapping for long Tamil words */
+          h1, p, pre, div {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
+          }
+          
+          /* Smaller gaps on mobile */
+          .gap-4 {
+            gap: 0.75rem !important;
+          }
+          
+          .gap-3 {
+            gap: 0.5rem !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

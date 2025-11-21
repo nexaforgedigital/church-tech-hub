@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Music, BookOpen, Download, Lightbulb, Phone, FileText, Calendar, HelpCircle } from 'lucide-react';
+import { Music, BookOpen, Download, Lightbulb, Phone, FileText, Calendar, HelpCircle, X, Menu } from 'lucide-react';
+import { useState } from 'react';
 
 export default function Navigation() {
   const router = useRouter();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const navItems = [
     { href: '/lyrics', label: 'Lyrics', icon: <Music size={18} /> },
@@ -32,14 +34,14 @@ export default function Navigation() {
               </div>
               <div>
                 <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent whitespace-nowrap">
-                  Church Tech Hub
+                  ChurchAssist
                 </div>
                 <div className="text-xs text-gray-600 whitespace-nowrap">Professional Worship Solutions</div>
               </div>
             </div>
           </Link>
 
-          {/* Navigation Links */}
+          {/* Desktop Navigation Links */}
           <div className="hidden lg:flex items-center gap-2">
             {navItems.map((item) => {
               const isActive = router.pathname === item.href;
@@ -61,13 +63,63 @@ export default function Navigation() {
           </div>
 
           {/* Mobile Menu Button */}
-          <button className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
-            <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12h18M3 6h18M3 18h18"/>
-            </svg>
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? (
+              <X size={24} className="text-gray-700" />
+            ) : (
+              <Menu size={24} className="text-gray-700" />
+            )}
           </button>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden py-4 border-t border-gray-200 animate-slide-down">
+            <div className="flex flex-col gap-2">
+              {navItems.map((item) => {
+                const isActive = router.pathname === item.href;
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <div 
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
+                        isActive 
+                          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md' 
+                          : item.highlight
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      <style jsx>{`
+        @keyframes slide-down {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-slide-down {
+          animation: slide-down 0.2s ease-out;
+        }
+      `}</style>
     </nav>
   );
 }
