@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, Filter, Music, Download } from 'lucide-react';
+import { Search, Filter, Music, Download, Home } from 'lucide-react';
 
 export default function LyricsLibrary() {
   const [songs, setSongs] = useState([]);
@@ -35,10 +35,34 @@ export default function LyricsLibrary() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Full Navigation Header */}
+      <nav className="bg-white shadow-md">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
+                <Home className="text-white" size={24} />
+              </div>
+              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Church Tech Hub
+              </span>
+            </Link>
+            <div className="hidden md:flex gap-6">
+              <Link href="/" className="text-gray-700 hover:text-blue-600 font-medium">Home</Link>
+              <Link href="/lyrics" className="text-blue-600 font-bold">Lyrics</Link>
+              <Link href="/tutorials" className="text-gray-700 hover:text-blue-600 font-medium">Tutorials</Link>
+              <Link href="/downloads" className="text-gray-700 hover:text-blue-600 font-medium">Downloads</Link>
+              <Link href="/tips" className="text-gray-700 hover:text-blue-600 font-medium">Tips</Link>
+              <Link href="/contact" className="text-gray-700 hover:text-blue-600 font-medium">Contact</Link>
+              <Link href="/how-to-use" className="text-green-600 hover:text-green-700 font-bold">📖 How to Use</Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Page Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-20">
         <div className="container mx-auto px-4">
-          <Link href="/" className="text-white hover:underline mb-4 inline-block">← Back to Home</Link>
           <h1 className="text-5xl font-bold mb-4">Lyrics Library</h1>
           <p className="text-xl">Browse and download worship lyrics in multiple formats</p>
         </div>
@@ -167,5 +191,20 @@ const sampleSongs = [
     category: "Worship",
     downloads: 312
   },
-  // Add more sample songs as needed
+  {
+    id: 4,
+    title: "என்னை தேடி வந்தார்",
+    artist: "Tamil Christian Song",
+    language: "Tamil",
+    category: "Gospel",
+    downloads: 156
+  },
+  {
+    id: 5,
+    title: "Blessed Assurance",
+    artist: "Fanny Crosby",
+    language: "English",
+    category: "Worship",
+    downloads: 198
+  }
 ];

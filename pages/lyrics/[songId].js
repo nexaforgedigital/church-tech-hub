@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Download, Eye, Share2, Heart, ChevronLeft, Maximize, Settings } from 'lucide-react';
+import { Download, Eye, Share2, Heart, ChevronLeft, Maximize, Settings, Home } from 'lucide-react';
 import PptxGenJS from 'pptxgenjs';
 
 export default function SongPage({ songId }) {
   const [song, setSong] = useState(null);
-  const [viewMode, setViewMode] = useState('both');
-  const [fontSize, setFontSize] = useState('medium');
+  const [viewMode, setViewMode] = useState('original');
+  const [fontSize, setFontSize] = useState('small');
   const [loading, setLoading] = useState(true);
   const [showPptSettings, setShowPptSettings] = useState(false);
   
@@ -16,7 +16,6 @@ export default function SongPage({ songId }) {
     fontFamily: 'Arial',
     fontSize: 32,
     textColor: 'FFFFFF',
-    position: 'middle',
     linesPerSlide: 2
   });
 
@@ -43,66 +42,39 @@ export default function SongPage({ songId }) {
     'gradient-red': { color: '991b1b' },
     'black': { color: '000000' },
     'dark-blue': { color: '1e293b' },
-    'cross-bg': { path: '/images/cross-bg.jpg' }
   };
 
   const generatePPT = () => {
     const ppt = new PptxGenJS();
     ppt.layout = 'LAYOUT_16x9';
 
-    // Title Slide
+    // Title Slide - PERFECTLY CENTERED
     let slide1 = ppt.addSlide();
-    if (backgrounds[pptSettings.background].path) {
-      slide1.background = { path: backgrounds[pptSettings.background].path };
-    } else {
-      slide1.background = { color: backgrounds[pptSettings.background].color };
-    }
+    slide1.background = { color: backgrounds[pptSettings.background].color };
     
     slide1.addText(song.title, {
-      x: 0.5, y: '40%', w: 9, h: 1.5,
+      x: 0, y: '40%', w: '100%', h: 1.5,
       fontSize: 48, 
       color: pptSettings.textColor, 
       bold: true, 
       align: 'center',
-      fontFace: pptSettings.fontFamily
-    });
-    slide1.addText(song.artist, {
-      x: 0.5, y: '55%', w: 9, h: 0.5,
-      fontSize: 24, 
-      color: pptSettings.textColor, 
-      align: 'center',
+      valign: 'middle',
       fontFace: pptSettings.fontFamily
     });
 
     // Get lyrics based on view mode
     const verses = getVersesForPPT();
 
-    // Calculate Y position based on alignment
-    let yPos;
-    switch(pptSettings.position) {
-      case 'top':
-        yPos = 1.5;
-        break;
-      case 'bottom':
-        yPos = 4;
-        break;
-      default: // middle
-        yPos = 2.5;
-    }
-
+    // Lyrics slides - ALWAYS CENTERED
     verses.forEach((verse) => {
       let slide = ppt.addSlide();
-      if (backgrounds[pptSettings.background].path) {
-        slide.background = { path: backgrounds[pptSettings.background].path };
-      } else {
-        slide.background = { color: backgrounds[pptSettings.background].color };
-      }
+      slide.background = { color: backgrounds[pptSettings.background].color };
       
       slide.addText(verse, {
         x: 0.5, 
-        y: yPos, 
+        y: '30%',
         w: 9, 
-        h: 3,
+        h: '40%',
         fontSize: pptSettings.fontSize,
         color: pptSettings.textColor,
         align: 'center',
@@ -114,17 +86,14 @@ export default function SongPage({ songId }) {
 
     // End slide
     let endSlide = ppt.addSlide();
-    if (backgrounds[pptSettings.background].path) {
-      endSlide.background = { path: backgrounds[pptSettings.background].path };
-    } else {
-      endSlide.background = { color: backgrounds[pptSettings.background].color };
-    }
+    endSlide.background = { color: backgrounds[pptSettings.background].color };
     endSlide.addText('', {
-      x: 0.5, y: '45%', w: 9, h: 1.5,
+      x: 0, y: '45%', w: '100%', h: 1.5,
       fontSize: 48, 
       color: pptSettings.textColor, 
       bold: true, 
       align: 'center',
+      valign: 'middle',
       fontFace: pptSettings.fontFamily
     });
 
@@ -145,7 +114,6 @@ export default function SongPage({ songId }) {
         allLines = song.lyrics.transliteration.map(l => l.text);
         break;
       case 'both':
-        // Combine 2 Tamil + 2 Transliteration lines per slide
         for (let i = 0; i < song.lyrics.tamil.length; i += linesPerSlide) {
           let slideText = '';
           for (let j = 0; j < linesPerSlide && (i + j) < song.lyrics.tamil.length; j++) {
@@ -159,7 +127,6 @@ export default function SongPage({ songId }) {
         return [];
     }
 
-    // Group lines into slides
     const verses = [];
     for (let i = 0; i < allLines.length; i += linesPerSlide) {
       verses.push(allLines.slice(i, i + linesPerSlide).join('\n'));
@@ -167,9 +134,14 @@ export default function SongPage({ songId }) {
     return verses;
   };
 
-  // Open Presentation Mode
   const openPresentationMode = () => {
-    window.open(`/present/${songId}?mode=${viewMode}`, '_blank', 'fullscreen=yes');
+    const params = new URLSearchParams({
+      mode: viewMode,
+      bg: pptSettings.background,
+      font: pptSettings.fontFamily,
+      fontSize: pptSettings.fontSize
+    });
+    window.open(`/present/${songId}?${params.toString()}`, '_blank');
   };
 
   if (loading) {
@@ -199,13 +171,19 @@ export default function SongPage({ songId }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-      {/* Header */}
+      {/* Header with Logo */}
       <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white py-12 shadow-xl">
         <div className="container mx-auto px-4">
-          <Link href="/lyrics" className="flex items-center gap-2 text-white hover:underline mb-4 hover:gap-3 transition-all">
-            <ChevronLeft size={20} />
-            Back to Library
-          </Link>
+          <div className="flex items-center justify-between mb-4">
+            <Link href="/lyrics" className="flex items-center gap-2 text-white hover:underline hover:gap-3 transition-all">
+              <ChevronLeft size={20} />
+              Back to Library
+            </Link>
+            <Link href="/" className="flex items-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur px-4 py-2 rounded-full transition">
+              <Home size={20} />
+              Home
+            </Link>
+          </div>
           <h1 className="text-5xl font-bold mb-2">{song.title}</h1>
           <p className="text-xl opacity-90">{song.artist}</p>
           <div className="flex gap-4 mt-4">
@@ -279,26 +257,26 @@ export default function SongPage({ songId }) {
           <div className="flex flex-wrap gap-4">
             <button
               onClick={openPresentationMode}
-              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-xl transition-all"
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:shadow-xl transition-all text-sm"
             >
-              <Maximize size={20} />
-              Present Mode (Fullscreen)
+              <Maximize size={18} />
+              Present Mode
             </button>
             
             <button
               onClick={() => setShowPptSettings(!showPptSettings)}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-xl transition-all"
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:shadow-xl transition-all text-sm"
             >
-              <Settings size={20} />
+              <Settings size={18} />
               PPT Settings
             </button>
 
             <button
               onClick={generatePPT}
-              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-xl transition-all"
+              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-5 py-2.5 rounded-lg font-semibold hover:shadow-xl transition-all text-sm"
             >
-              <Download size={20} />
-              Download PowerPoint
+              <Download size={18} />
+              Download PPT
             </button>
           </div>
 
@@ -354,20 +332,6 @@ export default function SongPage({ songId }) {
                   />
                 </div>
 
-                {/* Text Position */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Text Position</label>
-                  <select
-                    value={pptSettings.position}
-                    onChange={(e) => setPptSettings({...pptSettings, position: e.target.value})}
-                    className="w-full px-4 py-2 rounded-lg border-2 border-gray-300 focus:border-purple-500 focus:outline-none"
-                  >
-                    <option value="top">Top</option>
-                    <option value="middle">Middle (Centered)</option>
-                    <option value="bottom">Bottom</option>
-                  </select>
-                </div>
-
                 {/* Lines per Slide */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Lines per Slide</label>
@@ -384,9 +348,27 @@ export default function SongPage({ songId }) {
                 </div>
               </div>
 
+              {/* Download Button Inside Settings */}
+              <div className="mt-6 flex gap-4">
+                <button
+                  onClick={openPresentationMode}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-4 rounded-lg font-bold hover:shadow-xl transition-all text-lg"
+                >
+                  <Eye size={24} />
+                  Apply & Preview
+                </button>
+                <button
+                  onClick={generatePPT}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-4 rounded-lg font-bold hover:shadow-xl transition-all text-lg"
+                >
+                  <Download size={24} />
+                  Download PPT
+                </button>
+              </div>
+
               <div className="mt-4 p-4 bg-blue-100 rounded-lg">
                 <p className="text-sm text-blue-800">
-                  💡 <strong>Tip:</strong> Preview your settings by clicking "Present Mode" before downloading
+                  💡 <strong>Tip:</strong> Preview your settings by clicking "Present Mode" before downloading. Text is always centered for best readability.
                 </p>
               </div>
             </div>

@@ -1,35 +1,30 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
   
-  // Image optimization
+  // Modern image configuration
   images: {
-    domains: ['via.placeholder.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+      {
+        protocol: 'http',
+        hostname: '**',
+      },
+    ],
     formats: ['image/webp', 'image/avif'],
   },
   
-  // Compression
+  // Enable compression
   compress: true,
   
-  // PWA
-  async headers() {
-    return [
-      {
-        source: '/sw.js',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=0, must-revalidate',
-          },
-          {
-            key: 'Service-Worker-Allowed',
-            value: '/',
-          },
-        ],
-      },
-    ];
-  },
+  // Optimize for production
+  productionBrowserSourceMaps: false,
+  
+  // Empty turbopack config to silence the warning
+  turbopack: {},
 };
 
-module.exports = nextConfig;
+export default nextConfig;
