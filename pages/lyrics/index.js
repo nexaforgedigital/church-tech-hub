@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, Filter, Music, Download } from 'lucide-react';
+import { Filter } from 'lucide-react';
+import { songStorage } from '../../utils/songStorage';
+import { Plus, Music, Download, Search } from 'lucide-react';
 
 export default function LyricsLibrary() {
   const [songs, setSongs] = useState([]);
@@ -8,20 +10,31 @@ export default function LyricsLibrary() {
   const [languageFilter, setLanguageFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
-  // Load songs from API
   useEffect(() => {
     fetchSongs();
   }, []);
 
   const fetchSongs = async () => {
     try {
+      // Fetch default songs
       const response = await fetch('/api/songs');
-      const data = await response.json();
-      setSongs(data);
+      const defaultSongs = await response.json();
+      
+      // Get custom songs
+      const customSongs = songStorage.getCustomSongs();
+      
+      // Merge and mark custom songs
+      const allSongs = [
+        ...customSongs.map(song => ({ ...song, isCustom: true })),
+        ...defaultSongs
+      ];
+      
+      setSongs(allSongs);
     } catch (error) {
       console.error('Error fetching songs:', error);
-      // For demo purposes, use sample data
-      setSongs(sampleSongs);
+      // Fallback to custom + sample
+      const customSongs = songStorage.getCustomSongs();
+      setSongs([...customSongs.map(song => ({ ...song, isCustom: true })), ...sampleSongs]);
     }
   };
 
@@ -35,11 +48,36 @@ export default function LyricsLibrary() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Page Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-20">
-        <div className="container mx-auto px-4">
-          <h1 className="text-5xl font-bold mb-4">Lyrics Library</h1>
-          <p className="text-xl">Browse and download worship lyrics in multiple formats</p>
+      {/* Page Header - Enhanced */}
+      <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 text-white py-16 relative overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0">
+          <div className="absolute w-64 h-64 bg-white/10 rounded-full blur-3xl -top-32 -left-32 animate-pulse"></div>
+          <div className="absolute w-64 h-64 bg-white/10 rounded-full blur-3xl -bottom-32 -right-32 animate-pulse"></div>
+        </div>
+
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-2">Lyrics Library</h1>
+              <p className="text-xl text-blue-100">Browse and download worship lyrics in multiple formats</p>
+            </div>
+      
+            {/* Add Custom Song Button */}
+            <Link href="/add-song">
+              <button className="flex items-center gap-2 bg-white text-blue-600 px-6 py-3 rounded-xl font-bold hover:scale-105 transition shadow-2xl">
+                <Plus size={24} />
+                Add Custom Song
+              </button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Wave Divider */}
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0 0L60 5C120 10 240 20 360 23.3C480 26.7 600 23.3 720 21.7C840 20 960 20 1080 23.3C1200 26.7 1320 33.3 1380 36.7L1440 40V60H0V0Z" fill="white"/>
+          </svg>
         </div>
       </div>
 
@@ -47,23 +85,23 @@ export default function LyricsLibrary() {
       <div className="bg-white shadow-md sticky top-[72px] z-40">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
+            {/* Search - FIXED TEXT COLOR */}
             <div className="flex-1 relative">
               <input
                 type="text"
                 placeholder="Search songs..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-3 pl-12 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
+                className="w-full px-4 py-3 pl-12 rounded-lg border-2 border-gray-300 focus:border-blue-500 focus:outline-none text-gray-900 placeholder-gray-500"
               />
               <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
             </div>
 
-            {/* Language Filter */}
+            {/* Language Filter - FIXED TEXT COLOR */}
             <select
               value={languageFilter}
               onChange={(e) => setLanguageFilter(e.target.value)}
-              className="px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
+              className="px-4 py-3 rounded-lg border-2 border-gray-300 focus:border-blue-500 focus:outline-none text-gray-900 bg-white"
             >
               <option value="all">All Languages</option>
               <option value="Tamil">Tamil</option>
@@ -71,11 +109,11 @@ export default function LyricsLibrary() {
               <option value="Bilingual">Bilingual</option>
             </select>
 
-            {/* Category Filter */}
+            {/* Category Filter - FIXED TEXT COLOR */}
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
+              className="px-4 py-3 rounded-lg border-2 border-gray-300 focus:border-blue-500 focus:outline-none text-gray-900 bg-white"
             >
               <option value="all">All Categories</option>
               <option value="Worship">Worship</option>
@@ -86,8 +124,13 @@ export default function LyricsLibrary() {
             </select>
           </div>
 
-          <div className="mt-4 text-gray-600">
-            Showing {filteredSongs.length} of {songs.length} songs
+          <div className="mt-4 text-gray-600 flex items-center justify-between">
+            <span>Showing {filteredSongs.length} of {songs.length} songs</span>
+            <Link href="/add-song">
+              <button className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-4 py-2 rounded-lg font-semibold transition text-sm">
+                + Add Custom Song
+              </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -120,9 +163,16 @@ function SongCard({ song }) {
           <div className="bg-blue-100 p-3 rounded-lg">
             <Music className="text-blue-600" size={24} />
           </div>
-          <span className="text-xs bg-purple-100 text-purple-600 px-3 py-1 rounded-full font-semibold">
-            {song.language}
-          </span>
+          <div className="flex flex-col gap-2">
+            <span className="text-xs bg-purple-100 text-purple-600 px-3 py-1 rounded-full font-semibold">
+              {song.language}
+            </span>
+            {song.isCustom && (
+              <span className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full font-semibold">
+                Custom
+              </span>
+            )}
+          </div>
         </div>
         
         <h3 className="text-xl font-bold mb-2 text-gray-800">{song.title}</h3>
@@ -140,7 +190,6 @@ function SongCard({ song }) {
   );
 }
 
-// Sample data for demo
 const sampleSongs = [
   {
     id: 1,

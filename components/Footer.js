@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Heart, Mail, Github, Twitter } from 'lucide-react';
+import { Heart, Mail, Instagram } from 'lucide-react';
+import Image from 'next/image';
 
 export default function Footer() {
   return (
@@ -9,10 +10,13 @@ export default function Footer() {
           {/* About */}
           <div>
             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7L12 12L22 7L12 2Z" opacity="0.8"/>
-                <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z"/>
-              </svg>
+              <Image 
+                src="/logo.png" 
+                alt="ChurchAssist Logo" 
+                width={24} 
+                height={24}
+                className="object-contain"
+              />
               ChurchAssist
             </h3>
             <p className="text-gray-300 leading-relaxed">
@@ -28,6 +32,9 @@ export default function Footer() {
               <Link href="/worship-planner" className="block text-gray-300 hover:text-white transition">Service Planner</Link>
               <Link href="/song-sheet" className="block text-gray-300 hover:text-white transition">Song Sheets</Link>
               <Link href="/tutorials" className="block text-gray-300 hover:text-white transition">Tutorials</Link>
+              <Link href="/submit-song" className="block text-green-300 hover:text-green-200 transition font-semibold">
+               ✨ Submit a Song
+              </Link>
             </div>
           </div>
 
@@ -49,25 +56,33 @@ export default function Footer() {
               Join our community and stay updated with new features.
             </p>
             <div className="flex gap-3">
-              <a href="mailto:support@churchassist.in" className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition">
+              <a href="mailto:contact@churchassist.in" className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition" title="Email Us">
                 <Mail size={20} />
               </a>
-              <a href="#" className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition">
-                <Github size={20} />
-              </a>
-              <a href="#" className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition">
-                <Twitter size={20} />
+              <a href="https://www.instagram.com/church_assist?igsh=MWV2cjZnOGZtMnN4NQ==" target="_blank" rel="noopener noreferrer" className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition" title="Follow us on Instagram">
+                <Instagram size={20} />
               </a>
             </div>
           </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="text-gray-400 text-sm">
-            © 2024 ChurchAssist. Built with <Heart size={14} className="inline text-red-500" /> for worship teams worldwide.
+        <div className="border-t border-white/10 pt-8">
+          {/* Copyright - Centered */}
+          <div className="text-center mb-4">
+            <a 
+              href="https://www.nexaforgedigital.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-gray-300 hover:text-white transition text-sm inline-flex items-center gap-2"
+            >
+              © 2025 ChurchAssist. Designed and Forged at 
+              <span className="font-semibold text-blue-400 hover:text-blue-300">NexaForgeDigital</span>
+            </a>
           </div>
-          <div className="flex gap-6 text-sm text-gray-400">
+          
+          {/* Links - Centered */}
+          <div className="flex justify-center gap-6 text-sm text-gray-400">
             <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-white transition">Terms of Service</Link>
             <Link href="/how-to-use" className="hover:text-white transition">Documentation</Link>

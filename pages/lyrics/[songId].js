@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Download, Eye, Share2, Heart, ChevronLeft, Maximize, Settings, Home } from 'lucide-react';
+import { Download, Eye, Share2, Heart, ChevronLeft, Maximize, Settings, Home, Trash2, Edit } from 'lucide-react';
 import PptxGenJS from 'pptxgenjs';
+import { songStorage } from '../../utils/songStorage';
+import { useRouter } from 'next/router';
 
 export default function SongPage({ songId }) {
+  const router = useRouter();
   const [song, setSong] = useState(null);
   const [viewMode, setViewMode] = useState('original');
   const [fontSize, setFontSize] = useState('small');
   const [loading, setLoading] = useState(true);
   const [showPptSettings, setShowPptSettings] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // PPT Customization Settings
   const [pptSettings, setPptSettings] = useState({
@@ -25,12 +29,42 @@ export default function SongPage({ songId }) {
 
   const fetchSong = async () => {
     try {
+      // Check if it's a custom song (starts with 'custom-')
+      if (songId.toString().startsWith('custom-')) {
+        const customSongs = songStorage.getCustomSongs();
+        const customSong = customSongs.find(s => s.id === songId);
+        
+        if (customSong) {
+          setSong(customSong);
+          setLoading(false);
+          return;
+        } else {
+          console.error('Custom song not found');
+          setSong(null);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Try to fetch from API for default songs
       const response = await fetch(`/api/songs/${songId}`);
-      const data = await response.json();
-      setSong(data);
+      if (response.ok) {
+        const data = await response.json();
+        setSong(data);
+      } else {
+        setSong(demoSong);
+      }
       setLoading(false);
     } catch (error) {
-      setSong(demoSong);
+      console.error('Error fetching song:', error);
+      const customSongs = songStorage.getCustomSongs();
+      const customSong = customSongs.find(s => s.id === songId);
+      
+      if (customSong) {
+        setSong(customSong);
+      } else {
+        setSong(demoSong);
+      }
       setLoading(false);
     }
   };
@@ -45,10 +79,12 @@ export default function SongPage({ songId }) {
   };
 
   const generatePPT = () => {
+    if (!song) return;
+
     const ppt = new PptxGenJS();
     ppt.layout = 'LAYOUT_16x9';
 
-    // Title Slide - PERFECTLY CENTERED
+    // Title Slide
     let slide1 = ppt.addSlide();
     slide1.background = { color: backgrounds[pptSettings.background].color };
     
@@ -65,7 +101,7 @@ export default function SongPage({ songId }) {
     // Get lyrics based on view mode
     const verses = getVersesForPPT();
 
-    // Lyrics slides - ALWAYS CENTERED
+    // Lyrics slides
     verses.forEach((verse) => {
       let slide = ppt.addSlide();
       slide.background = { color: backgrounds[pptSettings.background].color };
@@ -101,28 +137,50 @@ export default function SongPage({ songId }) {
   };
 
   const getVersesForPPT = () => {
-    if (!song) return [];
+    if (!song || !song.lyrics) return [];
     
     const linesPerSlide = pptSettings.linesPerSlide;
+    const { tamil = [], english = [], transliteration = [] } = song.lyrics;
     let allLines = [];
 
     switch(viewMode) {
       case 'original':
-        allLines = song.lyrics.tamil.map(l => l.text);
+        if (tamil.length === 0) {
+          alert('Tamil lyrics not available. Please select another view mode.');
+          return [];
+        }
+        allLines = tamil.map(l => l.text);
         break;
+        
       case 'transliteration':
-        allLines = song.lyrics.transliteration.map(l => l.text);
+        if (transliteration.length === 0) {
+          alert('Transliteration not available. Please select another view mode.');
+          return [];
+        }
+        allLines = transliteration.map(l => l.text);
         break;
+        
       case 'both':
-        for (let i = 0; i < song.lyrics.tamil.length; i += linesPerSlide) {
+        if (tamil.length === 0 && transliteration.length === 0) {
+          alert('Lyrics not available. Please add lyrics first.');
+          return [];
+        }
+        
+        const maxLen = Math.max(tamil.length, transliteration.length);
+        for (let i = 0; i < maxLen; i += linesPerSlide) {
           let slideText = '';
-          for (let j = 0; j < linesPerSlide && (i + j) < song.lyrics.tamil.length; j++) {
-            slideText += song.lyrics.tamil[i + j].text + '\n';
-            slideText += song.lyrics.transliteration[i + j].text + '\n\n';
+          for (let j = 0; j < linesPerSlide && (i + j) < maxLen; j++) {
+            if (tamil[i + j]) {
+              slideText += tamil[i + j].text + '\n';
+            }
+            if (transliteration[i + j]) {
+              slideText += transliteration[i + j].text + '\n\n';
+            }
           }
           allLines.push(slideText.trim());
         }
         return allLines;
+        
       default:
         return [];
     }
@@ -144,6 +202,16 @@ export default function SongPage({ songId }) {
     window.open(`/present/${songId}?${params.toString()}`, '_blank');
   };
 
+  const handleDeleteSong = () => {
+    if (!song.isCustom) {
+      alert('Only custom songs can be deleted');
+      return;
+    }
+    
+    songStorage.deleteSong(song.id);
+    router.push('/lyrics');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
@@ -157,8 +225,17 @@ export default function SongPage({ songId }) {
 
   if (!song) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-2xl">Song not found</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
+        <div className="text-center max-w-md mx-auto p-8">
+          <div className="text-6xl mb-4">😕</div>
+          <h2 className="text-3xl font-bold mb-4 text-gray-800">Song Not Found</h2>
+          <p className="text-gray-600 mb-6">The song you're looking for doesn't exist or has been removed.</p>
+          <Link href="/lyrics">
+            <button className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition">
+              Back to Library
+            </button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -179,16 +256,39 @@ export default function SongPage({ songId }) {
               <ChevronLeft size={20} />
               Back to Library
             </Link>
-            <Link href="/" className="flex items-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur px-4 py-2 rounded-full transition">
-              <Home size={20} />
-              Home
-            </Link>
+            <div className="flex items-center gap-3">
+              {song.isCustom && (
+                <>
+                  <Link href={`/edit-song/${song.id}`}>
+                    <button className="flex items-center gap-2 bg-blue-500/20 hover:bg-blue-500/30 backdrop-blur px-4 py-2 rounded-full transition">
+                      <Edit size={20} />
+                      Edit
+                    </button>
+                  </Link>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="flex items-center gap-2 bg-red-500/20 hover:bg-red-500/30 backdrop-blur px-4 py-2 rounded-full transition"
+                    title="Delete Custom Song"
+                  >
+                    <Trash2 size={20} />
+                    Delete
+                  </button>
+                </>
+              )}
+              <Link href="/" className="flex items-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur px-4 py-2 rounded-full transition">
+                <Home size={20} />
+                Home
+              </Link>
+            </div>
           </div>
           <h1 className="text-5xl font-bold mb-2">{song.title}</h1>
-          <p className="text-xl opacity-90">{song.artist}</p>
+          <p className="text-xl opacity-90">{song.artist || 'Unknown Artist'}</p>
           <div className="flex gap-4 mt-4">
             <span className="bg-white/20 backdrop-blur px-4 py-2 rounded-full">{song.language}</span>
             <span className="bg-white/20 backdrop-blur px-4 py-2 rounded-full">{song.category}</span>
+            {song.isCustom && (
+              <span className="bg-green-500 px-4 py-2 rounded-full font-bold">Custom Song</span>
+            )}
           </div>
         </div>
       </div>
@@ -385,49 +485,56 @@ export default function SongPage({ songId }) {
         </div>
       </div>
 
-      {/* ⭐ MOBILE CSS FIX - ADD THIS STYLE TAG HERE ⭐ */}
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full">
+            <div className="text-center mb-6">
+              <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={32} className="text-red-600" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Delete Custom Song?</h2>
+              <p className="text-gray-600">
+                Are you sure you want to delete "<strong>{song.title}</strong>"? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 rounded-lg font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteSong}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold transition"
+              >
+                Delete Song
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         @media (max-width: 768px) {
-          /* Mobile text size fixes */
-          .text-5xl {
-            font-size: 2rem !important;
-            line-height: 1.2;
-          }
+          .text-8xl { font-size: 3rem !important; }
+          .text-7xl { font-size: 2.5rem !important; }
+          .text-6xl { font-size: 2rem !important; }
+          .text-5xl { font-size: 1.875rem !important; }
+          .text-4xl { font-size: 1.5rem !important; }
+          .text-3xl { font-size: 1.25rem !important; }
+          .text-2xl { font-size: 1.125rem !important; }
+          .text-xl { font-size: 1rem !important; }
           
-          .text-xl {
-            font-size: 1.125rem !important;
-          }
+          .p-12 { padding: 1.5rem !important; }
+          .p-8 { padding: 1rem !important; }
+          .py-12 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
           
-          /* Mobile padding adjustments */
-          .py-12 {
-            padding-top: 2rem !important;
-            padding-bottom: 2rem !important;
-          }
-          
-          .px-4 {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-          }
-          
-          /* Button text size on mobile */
-          .text-sm {
-            font-size: 0.875rem !important;
-          }
-          
-          /* Fix wrapping for long Tamil words */
-          h1, p, pre, div {
+          pre {
+            white-space: pre-wrap;
             word-wrap: break-word;
             overflow-wrap: break-word;
-            hyphens: auto;
-          }
-          
-          /* Smaller gaps on mobile */
-          .gap-4 {
-            gap: 0.75rem !important;
-          }
-          
-          .gap-3 {
-            gap: 0.5rem !important;
           }
         }
       `}</style>
@@ -436,30 +543,76 @@ export default function SongPage({ songId }) {
 }
 
 function renderLyrics(song, mode, fontSize) {
+  if (!song || !song.lyrics) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-xl text-gray-600">No lyrics available</p>
+      </div>
+    );
+  }
+
+  const { tamil = [], english = [], transliteration = [] } = song.lyrics;
+
   switch(mode) {
     case 'original':
-      return song.lyrics.tamil.map((line, i) => (
+      if (tamil.length === 0) {
+        return (
+          <div className="text-center py-12">
+            <p className="text-xl text-gray-600">Tamil lyrics not available</p>
+          </div>
+        );
+      }
+      return tamil.map((line, i) => (
         <p key={i} className={`${fontSize} text-gray-800 leading-relaxed`}>
           {line.text}
         </p>
       ));
     
     case 'transliteration':
-      return song.lyrics.transliteration.map((line, i) => (
+      if (transliteration.length === 0) {
+        return (
+          <div className="text-center py-12">
+            <p className="text-xl text-gray-600">Transliteration not available</p>
+          </div>
+        );
+      }
+      return transliteration.map((line, i) => (
         <p key={i} className={`${fontSize} text-gray-800 leading-relaxed`}>
           {line.text}
         </p>
       ));
     
     case 'both':
-      return song.lyrics.tamil.map((line, i) => (
-        <div key={i} className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-l-4 border-purple-500">
-          <p className={`${fontSize} text-gray-800 mb-2 font-semibold`}>{line.text}</p>
-          <p className={`${fontSize} text-purple-700 italic`}>
-            {song.lyrics.transliteration[i]?.text}
-          </p>
-        </div>
-      ));
+      if (tamil.length === 0 && transliteration.length === 0) {
+        return (
+          <div className="text-center py-12">
+            <p className="text-xl text-gray-600">Lyrics not available in this format</p>
+          </div>
+        );
+      }
+      
+      const maxLength = Math.max(tamil.length, transliteration.length);
+      const result = [];
+      
+      for (let i = 0; i < maxLength; i++) {
+        if (tamil[i] || transliteration[i]) {
+          result.push(
+            <div key={i} className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-l-4 border-purple-500">
+              {tamil[i] && (
+                <p className={`${fontSize} text-gray-800 mb-2 font-semibold`}>
+                  {tamil[i].text}
+                </p>
+              )}
+              {transliteration[i] && (
+                <p className={`${fontSize} text-purple-700 italic`}>
+                  {transliteration[i].text}
+                </p>
+              )}
+            </div>
+          );
+        }
+      }
+      return result;
   }
 }
 

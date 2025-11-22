@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Plus, Trash2, Play, BookOpen, Music, MessageSquare, X, Copy, Upload, Download as DownloadIcon, Edit2, Eye, Clock, Palette, Monitor } from 'lucide-react';
+import { songStorage } from '../utils/songStorage';
 
 export default function WorshipPlanner() {
   const [allSongs, setAllSongs] = useState([]);
@@ -23,7 +24,9 @@ export default function WorshipPlanner() {
     fontFamily: 'Arial',
     fontSize: 32,
     showTimer: true,
-    displayMode: 'tamil-transliteration'
+    displayMode: 'tamil-transliteration',
+    backgroundType: 'color',
+    backgroundSrc: ''
   });
 
   useEffect(() => {
@@ -48,11 +51,25 @@ export default function WorshipPlanner() {
 
   const fetchSongs = async () => {
     try {
+      // Fetch default songs from API
       const response = await fetch('/api/songs');
-      const data = await response.json();
-      setAllSongs(data);
+      const defaultSongs = await response.json();
+      
+      // Get custom songs from localStorage
+      const customSongs = songStorage.getCustomSongs();
+      
+      // Merge both lists
+      const allSongs = [
+        ...customSongs.map(song => ({ ...song, isCustom: true })),
+        ...defaultSongs
+      ];
+      
+      setAllSongs(allSongs);
     } catch (error) {
       console.error('Error fetching songs:', error);
+      // If API fails, just show custom songs
+      const customSongs = songStorage.getCustomSongs();
+      setAllSongs(customSongs.map(song => ({ ...song, isCustom: true })));
     }
   };
 
@@ -188,7 +205,7 @@ export default function WorshipPlanner() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 page-transition">
       {/* Header with Christian Theme */}
       <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-blue-900 text-white py-16 shadow-2xl relative overflow-hidden">
         {/* Christian Cross Pattern Background */}
@@ -241,7 +258,7 @@ export default function WorshipPlanner() {
                   type="text"
                   value={serviceName}
                   onChange={(e) => setServiceName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-xl font-semibold"
+                  className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-xl font-semibold text-gray-900"
                   placeholder="e.g., Sunday Morning Service"
                 />
               </div>
@@ -279,6 +296,12 @@ export default function WorshipPlanner() {
                 <Music size={20} />
                 Add Song
               </button>
+              <Link href="/add-song">
+                <button className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-6 py-3 rounded-lg font-semibold transition shadow-md">
+                  <Plus size={20} />
+                  Add Custom Song
+                </button>
+              </Link>
               <button
                 onClick={() => setShowBibleVerseModal(true)}
                 className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 rounded-lg font-semibold transition shadow-md"
@@ -398,6 +421,22 @@ export default function WorshipPlanner() {
       {/* Modals */}
       {showSongPicker && (
         <Modal onClose={() => setShowSongPicker(false)} title="Select Song">
+            {/* Add Custom Song Quick Link */}
+            <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-green-900 mb-1">Can't find your song?</h4>
+                  <p className="text-sm text-green-700">Add custom songs to your library</p>
+                </div>
+                <Link href="/add-song">
+                  <button className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg transition">
+                    <Plus size={18} />
+                    Add Custom
+                  </button>
+                </Link>
+              </div>
+            </div>
+
           <div className="space-y-2 max-h-[60vh] overflow-y-auto">
             {allSongs.map(song => (
               <button
@@ -405,8 +444,17 @@ export default function WorshipPlanner() {
                 onClick={() => addSong(song)}
                 className="w-full text-left p-4 bg-gradient-to-r from-gray-50 to-blue-50 hover:from-blue-100 hover:to-blue-200 rounded-lg transition border-2 border-transparent hover:border-blue-400"
               >
-                <div className="font-semibold text-lg">{song.title}</div>
-                <div className="text-sm text-gray-600">{song.artist} • {song.category}</div>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="font-semibold text-lg">{song.title}</div>
+                    <div className="text-sm text-gray-600">{song.artist} • {song.category}</div>
+                  </div>
+                  {song.isCustom && (
+                    <span className="ml-2 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
+                      Custom
+                    </span>
+                  )}
+                </div>
               </button>
             ))}
           </div>
@@ -422,7 +470,7 @@ export default function WorshipPlanner() {
                 type="text"
                 value={bibleVerse.reference}
                 onChange={(e) => setBibleVerse({...bibleVerse, reference: e.target.value})}
-                className="w-full px-4 py-3 rounded-lg border-2 focus:border-green-500 focus:outline-none"
+                className="w-full px-4 py-3 rounded-lg border-2 focus:border-green-500 focus:outline-none text-gray-900"
                 placeholder="John 3:16"
               />
             </div>
@@ -432,7 +480,7 @@ export default function WorshipPlanner() {
                 value={bibleVerse.text}
                 onChange={(e) => setBibleVerse({...bibleVerse, text: e.target.value})}
                 rows="6"
-                className="w-full px-4 py-3 rounded-lg border-2 focus:border-green-500 focus:outline-none"
+                className="w-full px-4 py-3 rounded-lg border-2 focus:border-green-500 focus:outline-none text-gray-900"
                 placeholder="For God so loved the world..."
               />
             </div>
@@ -456,7 +504,7 @@ export default function WorshipPlanner() {
                 type="text"
                 value={announcement.title}
                 onChange={(e) => setAnnouncement({...announcement, title: e.target.value})}
-                className="w-full px-4 py-3 rounded-lg border-2 focus:border-orange-500 focus:outline-none"
+                className="w-full px-4 py-3 rounded-lg border-2 focus:border-orange-500 focus:outline-none text-gray-900"
                 placeholder="e.g., Upcoming Events"
               />
             </div>
@@ -466,7 +514,7 @@ export default function WorshipPlanner() {
                 value={announcement.content}
                 onChange={(e) => setAnnouncement({...announcement, content: e.target.value})}
                 rows="8"
-                className="w-full px-4 py-3 rounded-lg border-2 focus:border-orange-500 focus:outline-none"
+                className="w-full px-4 py-3 rounded-lg border-2 focus:border-orange-500 focus:outline-none text-gray-900"
                 placeholder="Enter announcement details..."
               />
             </div>
@@ -484,13 +532,13 @@ export default function WorshipPlanner() {
       {showSettingsModal && (
         <Modal onClose={() => setShowSettingsModal(false)} title="Presentation Settings">
           <div className="space-y-4">
-            {/* Language Display Mode - NEW */}
+            {/* Language Display Mode */}
             <div>
               <label className="block text-sm font-semibold mb-2">Text Display Mode</label>
               <select
                 value={presentSettings.displayMode || 'tamil-transliteration'}
                 onChange={(e) => setPresentSettings({...presentSettings, displayMode: e.target.value})}
-                className="w-full px-4 py-2 rounded-lg border-2 focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 rounded-lg border-2 focus:border-purple-500 focus:outline-none text-gray-900 bg-white"
               >
                 <option value="tamil-transliteration">Tamil + Transliteration (Recommended)</option>
                 <option value="tamil-only">Tamil Only</option>
@@ -507,7 +555,7 @@ export default function WorshipPlanner() {
               <select
                 value={presentSettings.background}
                 onChange={(e) => setPresentSettings({...presentSettings, background: e.target.value})}
-                className="w-full px-4 py-2 rounded-lg border-2 focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 rounded-lg border-2 focus:border-purple-500 focus:outline-none text-gray-900 bg-white"
               >
                 <option value="gradient-blue">Deep Blue</option>
                 <option value="gradient-purple">Royal Purple</option>
@@ -523,7 +571,7 @@ export default function WorshipPlanner() {
               <select
                 value={presentSettings.fontFamily}
                 onChange={(e) => setPresentSettings({...presentSettings, fontFamily: e.target.value})}
-                className="w-full px-4 py-2 rounded-lg border-2 focus:border-purple-500 focus:outline-none"
+                className="w-full px-4 py-2 rounded-lg border-2 focus:border-purple-500 focus:outline-none text-gray-900 bg-white"
               >
                 <option value="Arial">Arial</option>
                 <option value="Calibri">Calibri</option>
@@ -545,7 +593,7 @@ export default function WorshipPlanner() {
               />
             </div>
       
-            {/* Preview Example - NEW */}
+            {/* Preview Example */}
             <div className="pt-4 border-t border-gray-200">
               <label className="block text-sm font-semibold mb-2">Preview</label>
               <div className="bg-gray-100 rounded-lg p-4 text-center">
@@ -637,6 +685,11 @@ function ServiceItemCard({ item, index, onMoveUp, onMoveDown, onRemove, onDuplic
         <div className="font-bold text-lg flex items-center gap-2">
           <span className="text-gray-500">{index + 1}.</span>
           <span className="truncate">{getTitle()}</span>
+          {item.data.isCustom && (
+            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-semibold">
+              Custom
+            </span>
+          )}
         </div>
         <div className="text-sm text-gray-600 truncate">{getSubtitle()}</div>
       </div>
