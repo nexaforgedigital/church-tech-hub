@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Grid, Monitor, X, Clock, List, Settings, Home, Maximize2, Square, Eye, GripVertical, Zap, Activity, ChevronUp, ChevronDown, Smartphone } from 'lucide-react';
-import BackgroundUploader from '../components/BackgroundUploader';
 import QRCodeGenerator from '../components/QRCodeGenerator';
+import BackgroundUploader from '../components/BackgroundUploader';
+import { createSession, updateSession, listenToSession } from '../lib/firebase';
 
 export default function PresenterControlWorship() {
   const router = useRouter();
@@ -17,9 +18,7 @@ export default function PresenterControlWorship() {
     background: 'gradient-blue',
     fontFamily: 'Arial',
     fontSize: 32,
-    displayMode: 'tamil-transliteration',
-    backgroundType: 'color',
-    backgroundSrc: ''
+    displayMode: 'tamil-transliteration'
   });
   const [mainWindowRef, setMainWindowRef] = useState(null);
   const [activeTab, setActiveTab] = useState('slides');
@@ -32,7 +31,7 @@ export default function PresenterControlWorship() {
   const [leftPanelWidth, setLeftPanelWidth] = useState(60);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Remote control states
+  // 🔥 FIREBASE: Remote control states
   const [sessionId, setSessionId] = useState('');
   const [showQRCode, setShowQRCode] = useState(false);
   const [remoteConnected, setRemoteConnected] = useState(false);
@@ -47,12 +46,6 @@ export default function PresenterControlWorship() {
   };
 
   const fontFamilies = ['Arial', 'Calibri', 'Georgia', 'Verdana', 'Times New Roman'];
-
-  // Generate session ID
-  useEffect(() => {
-    const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    setSessionId(newSessionId);
-  }, []);
 
   // Initialize service data
   useEffect(() => {
@@ -74,6 +67,83 @@ export default function PresenterControlWorship() {
       }
     }
   }, [service, settings]);
+
+  // 🔥 FIREBASE: Generate session ID and create session
+  useEffect(() => {
+    const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setSessionId(newSessionId);
+  }, []);
+
+  // 🔥 FIREBASE: Create session when slides are ready
+  useEffect(() => {
+    if (sessionId && allSlides.length > 0) {
+      createSession(sessionId, {
+        currentSlide: currentSlideIndex,
+        totalSlides: allSlides.length,
+        status: 'active'
+      });
+    }
+  }, [sessionId, allSlides.length]);
+
+  // 🔥 FIREBASE: Listen for remote commands
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const unsubscribe = listenToSession(sessionId, (data) => {
+      if (data.command) {
+        const { action, timestamp } = data.command;
+        
+        // Only process recent commands (within 2 seconds)
+        if (Date.now() - timestamp < 2000) {
+          handleRemoteCommand(action);
+        }
+      }
+      
+      // Update remote connection status
+      if (data.remoteConnected) {
+        setRemoteConnected(true);
+      } else {
+        setRemoteConnected(false);
+      }
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [sessionId, currentSlideIndex, allSlides.length]);
+
+  // 🔥 FIREBASE: Sync slide changes to Firebase
+  useEffect(() => {
+    if (sessionId && allSlides.length > 0) {
+      updateSession(sessionId, {
+        currentSlide: currentSlideIndex,
+        totalSlides: allSlides.length,
+        status: 'active'
+      });
+    }
+  }, [currentSlideIndex, allSlides.length, sessionId]);
+
+  // 🔥 FIREBASE: Handle remote commands
+  const handleRemoteCommand = (action) => {
+    console.log('🎮 Remote command received:', action);
+    switch(action) {
+      case 'NEXT_SLIDE':
+        changeSlide(currentSlideIndex + 1);
+        break;
+      case 'PREV_SLIDE':
+        changeSlide(currentSlideIndex - 1);
+        break;
+      case 'FIRST_SLIDE':
+        changeSlide(0);
+        break;
+      case 'LAST_SLIDE':
+        changeSlide(allSlides.length - 1);
+        break;
+      case 'SHOW_GRID':
+        setActiveTab('slides');
+        break;
+    }
+  };
 
   // Generate slides with useCallback
   const generateAllSlides = useCallback(async (items) => {
@@ -190,7 +260,7 @@ export default function PresenterControlWorship() {
     return () => clearInterval(interval);
   }, [isTimerRunning]);
 
-  // Listen for messages from main window
+  // Listen for messages
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data.type === 'MAIN_READY') {
@@ -209,56 +279,6 @@ export default function PresenterControlWorship() {
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
-
-  // Remote control listener
-  useEffect(() => {
-    const handleRemoteCommand = (event) => {
-      if (event.data.type === 'REMOTE_COMMAND' && event.data.sessionId === sessionId) {
-        const { command } = event.data;
-        
-        switch(command) {
-          case 'NEXT_SLIDE':
-            changeSlide(currentSlideIndex + 1);
-            break;
-          case 'PREV_SLIDE':
-            changeSlide(currentSlideIndex - 1);
-            break;
-          case 'FIRST_SLIDE':
-            changeSlide(0);
-            break;
-          case 'LAST_SLIDE':
-            changeSlide(allSlides.length - 1);
-            break;
-          case 'SHOW_GRID':
-            setActiveTab('slides');
-            break;
-        }
-      } else if (event.data.type === 'REMOTE_CONNECTED') {
-        setRemoteConnected(true);
-        if (event.source) {
-          event.source.postMessage({
-            type: 'REMOTE_SYNC',
-            currentSlide: currentSlideIndex,
-            totalSlides: allSlides.length
-          }, '*');
-        }
-      }
-    };
-
-    window.addEventListener('message', handleRemoteCommand);
-    return () => window.removeEventListener('message', handleRemoteCommand);
-  }, [currentSlideIndex, allSlides.length, sessionId]);
-
-  // Sync remote on slide change
-  useEffect(() => {
-    if (remoteConnected) {
-      window.postMessage({
-        type: 'REMOTE_SYNC',
-        currentSlide: currentSlideIndex,
-        totalSlides: allSlides.length
-      }, '*');
-    }
-  }, [currentSlideIndex, allSlides.length, remoteConnected]);
 
   // Check connection
   useEffect(() => {
@@ -443,7 +463,7 @@ export default function PresenterControlWorship() {
 
   const currentSlide = allSlides[currentSlideIndex];
   const nextSlide = currentSlideIndex < allSlides.length - 1 ? allSlides[currentSlideIndex + 1] : null;
-  const currentBgColor = backgrounds[presentSettings.background]?.color || '#1e3a8a';
+  const currentBgColor = backgrounds[presentSettings.background].color;
 
   const groupedItems = serviceItems.map((item, index) => ({
     ...item,
@@ -486,7 +506,7 @@ export default function PresenterControlWorship() {
 
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
-      {/* Top Bar */}
+      {/* Top Bar - Compact */}
       <div className="bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 border-b border-gray-800 shadow-2xl flex-shrink-0">
         <div className="flex items-center justify-between px-4 py-2.5">
           <div className="flex items-center gap-3">
@@ -522,15 +542,16 @@ export default function PresenterControlWorship() {
               {connectionStatus === 'connected' ? 'Live' : connectionStatus === 'connecting' ? 'Connecting' : 'Offline'}
             </div>
 
+            {/* 🔥 FIREBASE: Remote Control Button */}
             <button
               onClick={() => setShowQRCode(!showQRCode)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-semibold transition text-xs ${
-                remoteConnected ? 'bg-green-600 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'
+                remoteConnected ? 'bg-green-500 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'
               }`}
               title="Mobile Remote Control"
             >
               <Smartphone size={16} />
-              {remoteConnected ? 'Remote ON' : 'Remote'}
+              {remoteConnected ? 'Remote' : 'Remote'}
             </button>
 
             {!mainWindowRef || mainWindowRef.closed ? (
@@ -551,7 +572,7 @@ export default function PresenterControlWorship() {
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs - Integrated */}
         <div className="flex gap-0 px-4 bg-gray-950">
           <button onClick={() => setActiveTab('slides')} className={`px-4 py-2 font-semibold transition flex items-center gap-2 text-xs border-b-2 ${activeTab === 'slides' ? 'border-blue-500 text-white bg-gray-900/50' : 'border-transparent text-gray-400 hover:text-white'}`}>
             <Grid size={14} />
@@ -570,11 +591,11 @@ export default function PresenterControlWorship() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - Fixed Height, No Scroll */}
       <div id="main-container" className="flex-1 flex gap-0 bg-gray-950 overflow-hidden">
-        {/* Left Panel */}
+        {/* Left Panel - Fixed, No Scroll */}
         <div className="flex flex-col gap-3 p-3 bg-gray-950" style={{ width: `${leftPanelWidth}%` }}>
-          {/* Previews */}
+          {/* Previews - Fixed Height */}
           <div className="flex gap-3" style={{ height: '40vh' }}>
             <div className="flex-1 bg-gray-900 rounded-xl overflow-hidden shadow-2xl border-2 border-red-500 relative">
               <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent px-3 py-2 z-10">
@@ -612,7 +633,7 @@ export default function PresenterControlWorship() {
             </div>
           </div>
 
-          {/* Info Card */}
+          {/* Info Card - Fixed Height */}
           <div className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-xl p-3 shadow-xl border border-blue-800/50 flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
@@ -633,7 +654,7 @@ export default function PresenterControlWorship() {
             </div>
           </div>
 
-          {/* Navigation */}
+          {/* Navigation - Fixed Height */}
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-3 shadow-xl border border-gray-700 flex-shrink-0">
             <h3 className="text-xs font-bold mb-2 text-gray-300 uppercase flex items-center gap-1.5">
               <ChevronRight size={12} />
@@ -668,8 +689,9 @@ export default function PresenterControlWorship() {
           <GripVertical size={16} className="text-gray-600 group-hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
 
-        {/* Right Panel - Tab Content */}
+        {/* Right Panel - Full Height, Embedded Look */}
         <div className="flex-1 bg-gray-900 overflow-hidden flex flex-col">
+          {/* Tab Content - Full Height, Only This Scrolls */}
           {activeTab === 'slides' && (
             <div className="flex-1 overflow-y-auto p-3" ref={slideListRef}>
               <div className="space-y-2">
@@ -709,48 +731,45 @@ export default function PresenterControlWorship() {
           {activeTab === 'service' && (
             <div className="flex-1 overflow-y-auto p-3">
               <div className="space-y-2">
-                {groupedItems.map((item, index) => {
-                  const isCurrentItem = item.slides.some(slide => allSlides.indexOf(slide) === currentSlideIndex);
-                  return (
-                    <button
-                      key={`item-${index}`}
-                      onClick={() => goToItem(parseInt(index))}
-                      className={`w-full text-left p-4 rounded-lg transition border-2 cursor-pointer transform hover:scale-[1.01] ${
-                        isCurrentItem 
-                          ? 'bg-gradient-to-r from-yellow-600 to-orange-600 border-yellow-400 shadow-lg scale-[1.02]' 
-                          : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`text-2xl font-bold flex-shrink-0 ${isCurrentItem ? 'text-white' : 'text-gray-600'}`}>
-                          {parseInt(index) + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold mb-1 line-clamp-2">
-                            {item.type === 'song' ? item.data.title : 
-                             item.type === 'verse' ? item.data.reference : 
-                             item.data.title}
-                          </div>
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className={`px-2 py-0.5 rounded-full capitalize font-semibold ${
-                              isCurrentItem ? 'bg-white/30' : 'bg-white/10'
-                            }`}>
-                              {item.type}
-                            </span>
-                            <span className="opacity-75">
-                              {item.slides.length} slide{item.slides.length !== 1 ? 's' : ''}
-                            </span>
-                          </div>
-                          {isCurrentItem && (
-                            <div className="bg-white text-black px-2 py-0.5 rounded-full text-xs font-bold inline-block mt-1">
-                              ▶ ACTIVE
-                            </div>
-                          )}
-                        </div>
+                {groupedItems.map((item, index) => (
+                  <button
+                    key={`item-${index}`}
+                    onClick={() => goToItem(index)}
+                    className={`w-full text-left p-4 rounded-lg transition border-2 cursor-pointer transform hover:scale-[1.01] ${
+                      item.isActive 
+                        ? 'bg-gradient-to-r from-yellow-600 to-orange-600 border-yellow-400 shadow-lg scale-[1.02]' 
+                        : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`text-2xl font-bold flex-shrink-0 ${item.isActive ? 'text-white' : 'text-gray-600'}`}>
+                        {index + 1}
                       </div>
-                    </button>
-                  );
-                })}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold mb-1 line-clamp-2">
+                          {item.type === 'song' ? item.data.title : 
+                           item.type === 'verse' ? item.data.reference : 
+                           item.data.title}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`px-2 py-0.5 rounded-full capitalize font-semibold ${
+                            item.isActive ? 'bg-white/30' : 'bg-white/10'
+                          }`}>
+                            {item.type}
+                          </span>
+                          <span className="opacity-75">
+                            {item.slides.length} slide{item.slides.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        {item.isActive && (
+                          <div className="bg-white text-black px-2 py-0.5 rounded-full text-xs font-bold inline-block mt-1">
+                            ▶ ACTIVE
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -774,80 +793,26 @@ export default function PresenterControlWorship() {
                   </select>
                 </div>
 
-                {/* Background Settings Section */}
-                <div className="border-t-2 border-gray-700 pt-4">
-                  <label className="block text-xs font-semibold mb-3 text-gray-300">Background Type</label>
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    <button
-                      onClick={() => updateSettings({...presentSettings, backgroundType: 'color'})}
-                      className={`p-3 rounded-lg transition text-sm ${
-                        (presentSettings.backgroundType || 'color') === 'color'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Color
-                    </button>
-                    <button
-                      onClick={() => updateSettings({...presentSettings, backgroundType: 'image'})}
-                      className={`p-3 rounded-lg transition text-sm ${
-                        presentSettings.backgroundType === 'image'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Image
-                    </button>
-                    <button
-                      onClick={() => updateSettings({...presentSettings, backgroundType: 'video'})}
-                      className={`p-3 rounded-lg transition text-sm ${
-                        presentSettings.backgroundType === 'video'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Video
-                    </button>
+                <div>
+                  <label className="block text-xs font-semibold mb-2 text-gray-300">Background Color</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Object.entries(backgrounds).map(([key, value]) => (
+                      <button
+                        key={key}
+                        onClick={() => updateSettings({...presentSettings, background: key})}
+                        className={`p-3 rounded-lg border-2 transition cursor-pointer ${
+                          presentSettings.background === key 
+                            ? 'border-blue-500 ring-2 ring-blue-500/50 scale-105' 
+                            : 'border-gray-700 hover:border-gray-600'
+                        }`}
+                        style={{ backgroundColor: value.color }}
+                      >
+                        <div className="text-white text-xs font-semibold text-center drop-shadow-lg">
+                          {value.name}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-
-                  {/* Color Backgrounds */}
-                  {(presentSettings.backgroundType || 'color') === 'color' && (
-                    <div>
-                      <label className="block text-xs font-semibold mb-2 text-gray-300">Background Color</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {Object.entries(backgrounds).map(([key, value]) => (
-                          <button
-                            key={key}
-                            onClick={() => updateSettings({...presentSettings, background: key})}
-                            className={`p-3 rounded-lg border-2 transition cursor-pointer ${
-                              presentSettings.background === key 
-                                ? 'border-blue-500 ring-2 ring-blue-500/50 scale-105' 
-                                : 'border-gray-700 hover:border-gray-600'
-                            }`}
-                            style={{ backgroundColor: value.color }}
-                          >
-                            <div className="text-white text-xs font-semibold text-center drop-shadow-lg">
-                              {value.name}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Image/Video Uploader */}
-                  {(presentSettings.backgroundType === 'image' || presentSettings.backgroundType === 'video') && (
-                    <BackgroundUploader
-                      currentBackground={presentSettings.backgroundSrc}
-                      onSelect={(src, type) => {
-                        updateSettings({
-                          ...presentSettings,
-                          backgroundType: type,
-                          backgroundSrc: src
-                        });
-                      }}
-                    />
-                  )}
                 </div>
 
                 <div>
@@ -901,7 +866,7 @@ export default function PresenterControlWorship() {
         </div>
       </div>
 
-      {/* QR Code Modal */}
+      {/* 🔥 FIREBASE: QR Code Modal */}
       {showQRCode && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
@@ -909,9 +874,9 @@ export default function PresenterControlWorship() {
               <h2 className="text-2xl font-bold text-gray-900">Mobile Remote Control</h2>
               <button
                 onClick={() => setShowQRCode(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-600"
               >
-                <X size={24} className="text-gray-600" />
+                <X size={24} />
               </button>
             </div>
             
@@ -933,7 +898,10 @@ export default function PresenterControlWorship() {
               
               {remoteConnected && (
                 <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 text-center">
-                  <p className="text-green-800 font-semibold">✅ Remote Connected!</p>
+                  <p className="text-green-800 font-semibold flex items-center justify-center gap-2">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    Remote Connected!
+                  </p>
                 </div>
               )}
             </div>
