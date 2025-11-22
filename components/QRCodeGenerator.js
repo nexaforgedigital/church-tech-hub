@@ -5,7 +5,6 @@ export default function QRCodeGenerator({ url, size = 200 }) {
 
   useEffect(() => {
     if (canvasRef.current && url) {
-      // Simple QR code generation (you can use qrcode library for better results)
       generateQR(url);
     }
   }, [url]);
@@ -13,11 +12,22 @@ export default function QRCodeGenerator({ url, size = 200 }) {
   const generateQR = (text) => {
     // Using Google Charts API as a simple solution
     const canvas = canvasRef.current;
+    if (!canvas) return;
+    
     const ctx = canvas.getContext('2d');
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       ctx.drawImage(img, 0, 0, size, size);
+    };
+    img.onerror = () => {
+      // Fallback: draw a placeholder
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#666';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('QR Code', size / 2, size / 2);
     };
     img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`;
   };

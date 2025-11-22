@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload, Trash2, Eye, Check } from 'lucide-react';
+import { Upload, Trash2, Check } from 'lucide-react';
 
 export default function BackgroundUploader({ onSelect, currentBackground }) {
   const [backgrounds, setBackgrounds] = useState([]);
@@ -10,6 +10,7 @@ export default function BackgroundUploader({ onSelect, currentBackground }) {
   }, []);
 
   const loadBackgrounds = () => {
+    if (typeof window === 'undefined') return;
     const stored = localStorage.getItem('customBackgrounds');
     setBackgrounds(stored ? JSON.parse(stored) : []);
   };
