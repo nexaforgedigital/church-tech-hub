@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { ChevronLeft, ChevronRight, X, Grid, Maximize, Clock, Pause, Play, RotateCcw, List, Minimize } from 'lucide-react';
 import VideoBackground from '../components/VideoBackground';
 import LandscapePrompt from '../components/LandscapePrompt';
+import { songStorage } from '../utils/songStorage';
 
 export default function WorshipPresenter() {
   const router = useRouter();
@@ -49,9 +50,41 @@ export default function WorshipPresenter() {
       
       if (item.type === 'song') {
         try {
-          const response = await fetch(`/api/songs/${item.data.id}`);
-          const song = await response.json();
+          let song;
           
+          // Check if it's a custom song
+          if (item.data.id && item.data.id.toString().startsWith('custom-')) {
+            const customSongs = songStorage.getCustomSongs();
+            song = customSongs.find(s => s.id === item.data.id);
+            
+            if (!song) {
+              console.error('Custom song not found:', item.data.id);
+              continue;
+            }
+          } else {
+            // Fetch from API
+            const response = await fetch(`/api/songs/${item.data.id}`);
+            if (!response.ok) {
+              console.error('Failed to fetch song:', item.data.id);
+              continue;
+            }
+            song = await response.json();
+          }
+          
+          // Validate lyrics exist
+          if (!song.lyrics) {
+            console.error('Song has no lyrics:', song.title);
+            continue;
+          }
+          
+          // Initialize lyrics with empty arrays if undefined
+          const lyrics = {
+            tamil: song.lyrics.tamil || [],
+            english: song.lyrics.english || [],
+            transliteration: song.lyrics.transliteration || []
+          };
+          
+          // Title slide
           slides.push({
             type: 'song-title',
             content: song.title,
@@ -60,55 +93,84 @@ export default function WorshipPresenter() {
             slideNumber: slides.length + 1
           });
 
-          for (let i = 0; i < song.lyrics.tamil.length; i += 2) {
+          // Generate lyric slides based on available data
+          const maxLength = Math.max(
+            lyrics.tamil.length,
+            lyrics.english.length,
+            lyrics.transliteration.length
+          );
+
+          for (let i = 0; i < maxLength; i += 2) {
             let content = '';
             
-            for (let j = 0; j < 2 && (i + j) < song.lyrics.tamil.length; j++) {
+            for (let j = 0; j < 2 && (i + j) < maxLength; j++) {
               const lineIndex = i + j;
               
               switch(displayMode) {
                 case 'tamil-only':
-                  content += song.lyrics.tamil[lineIndex].text + '\n\n';
+                  if (lyrics.tamil[lineIndex]) {
+                    content += lyrics.tamil[lineIndex].text + '\n\n';
+                  }
                   break;
                   
                 case 'transliteration-only':
-                  content += song.lyrics.transliteration[lineIndex].text + '\n\n';
+                  if (lyrics.transliteration[lineIndex]) {
+                    content += lyrics.transliteration[lineIndex].text + '\n\n';
+                  }
                   break;
                   
                 case 'english-only':
-                  content += song.lyrics.english[lineIndex].text + '\n\n';
+                  if (lyrics.english[lineIndex]) {
+                    content += lyrics.english[lineIndex].text + '\n\n';
+                  }
                   break;
                   
                 case 'tamil-english':
-                  content += song.lyrics.tamil[lineIndex].text + '\n';
-                  content += song.lyrics.english[lineIndex].text + '\n\n';
+                  if (lyrics.tamil[lineIndex]) {
+                    content += lyrics.tamil[lineIndex].text + '\n';
+                  }
+                  if (lyrics.english[lineIndex]) {
+                    content += lyrics.english[lineIndex].text + '\n\n';
+                  }
                   break;
                   
                 case 'all':
-                  content += song.lyrics.tamil[lineIndex].text + '\n';
-                  content += song.lyrics.transliteration[lineIndex].text + '\n';
-                  content += song.lyrics.english[lineIndex].text + '\n\n';
+                  if (lyrics.tamil[lineIndex]) {
+                    content += lyrics.tamil[lineIndex].text + '\n';
+                  }
+                  if (lyrics.transliteration[lineIndex]) {
+                    content += lyrics.transliteration[lineIndex].text + '\n';
+                  }
+                  if (lyrics.english[lineIndex]) {
+                    content += lyrics.english[lineIndex].text + '\n\n';
+                  }
                   break;
                   
                 case 'tamil-transliteration':
                 default:
-                  content += song.lyrics.tamil[lineIndex].text + '\n';
-                  content += song.lyrics.transliteration[lineIndex].text + '\n\n';
+                  if (lyrics.tamil[lineIndex]) {
+                    content += lyrics.tamil[lineIndex].text + '\n';
+                  }
+                  if (lyrics.transliteration[lineIndex]) {
+                    content += lyrics.transliteration[lineIndex].text + '\n\n';
+                  }
                   break;
               }
             }
             
-            slides.push({
-              type: 'song-lyrics',
-              content: content.trim(),
-              itemIndex,
-              itemTitle: song.title,
-              slideNumber: slides.length + 1,
-              displayMode: displayMode
-            });
+            if (content.trim()) {
+              slides.push({
+                type: 'song-lyrics',
+                content: content.trim(),
+                itemIndex,
+                itemTitle: song.title,
+                slideNumber: slides.length + 1,
+                displayMode: displayMode
+              });
+            }
           }
         } catch (error) {
-          console.error('Error fetching song:', error);
+          console.error('Error processing song:', error);
         }
       } else if (item.type === 'verse') {
         slides.push({
@@ -231,16 +293,19 @@ export default function WorshipPresenter() {
     return () => clearInterval(interval);
   }, [isTimerRunning]);
 
-  // Auto fullscreen
+  // Auto fullscreen - with user gesture check
   useEffect(() => {
-    const timer = setTimeout(async () => {
+    const attemptFullscreen = async () => {
       try {
         await document.documentElement.requestFullscreen();
         setIsFullscreen(true);
       } catch (err) {
         console.log('Fullscreen not supported or blocked');
       }
-    }, 500);
+    };
+
+    // Try after a short delay
+    const timer = setTimeout(attemptFullscreen, 500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -378,7 +443,9 @@ export default function WorshipPresenter() {
   }
 
   const currentSlide = allSlides[currentSlideIndex];
-  const currentBgColor = backgrounds[presentSettings.background] || '#1e3a8a';
+  const currentBgColor = backgrounds[presentSettings.background];
+  const currentFont = presentSettings.fontFamily || 'Arial';
+  const currentFontSize = presentSettings.fontSize || 32;
 
   const groupedSlides = allSlides.reduce((acc, slide) => {
     const itemIndex = slide.itemIndex;
@@ -396,7 +463,7 @@ export default function WorshipPresenter() {
     <>
       <LandscapePrompt />
       <div className="landscape-only h-screen flex flex-col text-white relative overflow-hidden">
-        {/* Background - Video/Image/Color */}
+        {/* Background - Video or Color */}
         {presentSettings.backgroundType === 'video' || presentSettings.backgroundType === 'image' ? (
           <VideoBackground 
             src={presentSettings.backgroundSrc} 
@@ -406,7 +473,6 @@ export default function WorshipPresenter() {
           />
         ) : (
           <div className="absolute inset-0" style={{ backgroundColor: currentBgColor }}>
-            {/* Pattern Overlay */}
             <div className="absolute inset-0 opacity-10 pointer-events-none">
               <div className="absolute top-0 left-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
               <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
@@ -415,60 +481,54 @@ export default function WorshipPresenter() {
           </div>
         )}
 
-        {/* Main Content */}
+        {/* Main Content - VERTICALLY CENTERED */}
         <div className="flex-1 flex items-center justify-center p-12 relative z-10">
-          <div className="w-full max-w-7xl">
+          <div className="w-full max-w-7xl animate-fade-in" key={currentSlideIndex}>
             {currentSlide.type === 'song-title' && (
               <div className="text-center flex items-center justify-center min-h-[60vh]">
-                <h1 className="text-8xl font-bold drop-shadow-2xl leading-tight" style={{ fontFamily: font }}>
+                <h1 className="text-8xl font-bold drop-shadow-2xl leading-tight" style={{ fontFamily: currentFont }}>
                   {currentSlide.content}
                 </h1>
               </div>
             )}
-    
+
             {currentSlide.type === 'song-lyrics' && (
               <div className="text-center flex items-center justify-center min-h-[60vh]">
                 <pre 
-                  className="text-5xl leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" 
+                  className="leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" 
                   style={{ 
-                    fontFamily: font, 
-                    fontSize: `${fontSize}pt`
+                    fontSize: `${currentFontSize}pt`, 
+                    fontFamily: currentFont 
                   }}
                 >
                   {currentSlide.content}
                 </pre>
               </div>
             )}
-    
+
             {currentSlide.type === 'verse' && (
               <div className="text-center flex items-center justify-center min-h-[60vh]">
-                <div>
-                  <div className="text-5xl font-bold mb-10 text-yellow-300 drop-shadow-xl" style={{ fontFamily: font }}>
+                <div className="max-w-5xl">
+                  <div className="text-5xl font-bold mb-10 text-yellow-300 drop-shadow-xl" style={{ fontFamily: currentFont }}>
                     {currentSlide.reference}
                   </div>
-                  <div className="text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: font }}>
+                  <div className="text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: currentFont }}>
                     {currentSlide.content}
                   </div>
                 </div>
               </div>
             )}
-    
+
             {currentSlide.type === 'announcement' && (
               <div className="text-center flex items-center justify-center min-h-[60vh]">
                 <div className="max-w-6xl">
-                  <div className="text-7xl font-bold mb-12 drop-shadow-2xl" style={{ fontFamily: font }}>
+                  <div className="text-7xl font-bold mb-12 drop-shadow-2xl" style={{ fontFamily: currentFont }}>
                     {currentSlide.title}
                   </div>
-                  <div className="text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: font }}>
+                  <div className="text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: currentFont }}>
                     {currentSlide.content}
                   </div>
                 </div>
-              </div>
-            )}
-    
-            {currentSlide.type === 'end' && (
-              <div className="text-center flex items-center justify-center min-h-[60vh]">
-                <div className="text-6xl font-bold drop-shadow-2xl opacity-50">•</div>
               </div>
             )}
           </div>

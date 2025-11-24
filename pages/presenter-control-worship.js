@@ -87,29 +87,42 @@ export default function PresenterControlWorship() {
   }, [sessionId, allSlides.length]);
 
   // 🔥 FIREBASE: Listen for remote commands
+  // Listen for remote commands from Firebase
   useEffect(() => {
     if (!sessionId) return;
 
+    console.log('👂 Setting up Firebase listener for session:', sessionId);
+
     const unsubscribe = listenToSession(sessionId, (data) => {
+      console.log('📩 Firebase data received:', data);
+    
       if (data.command) {
         const { action, timestamp } = data.command;
-        
-        // Only process recent commands (within 2 seconds)
-        if (Date.now() - timestamp < 2000) {
+      
+        console.log('🎮 Command detected:', action, 'Timestamp:', timestamp);
+      
+        // Only process recent commands (within 5 seconds)
+        const age = Date.now() - timestamp;
+        if (age < 5000) {
+          console.log('✅ Processing command (age:', age, 'ms)');
           handleRemoteCommand(action);
+        } else {
+          console.log('⏰ Command too old, ignoring (age:', age, 'ms)');
         }
       }
-      
+    
       // Update remote connection status
       if (data.remoteConnected) {
         setRemoteConnected(true);
-      } else {
-        setRemoteConnected(false);
+        console.log('📱 Remote connected');
       }
     });
 
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (unsubscribe) {
+        console.log('🔌 Unsubscribing from Firebase');
+        unsubscribe();
+      }
     };
   }, [sessionId, currentSlideIndex, allSlides.length]);
 
@@ -131,32 +144,37 @@ export default function PresenterControlWorship() {
   
     switch(action) {
       case 'NEXT_SLIDE':
+        console.log('➡️ Next slide command');
         if (currentSlideIndex < allSlides.length - 1) {
           changeSlide(currentSlideIndex + 1);
         }
         break;
       
       case 'PREV_SLIDE':
+        console.log('⬅️ Previous slide command');
         if (currentSlideIndex > 0) {
           changeSlide(currentSlideIndex - 1);
         }
         break;
       
       case 'FIRST_SLIDE':
+        console.log('⏮️ First slide command');
         changeSlide(0);
         break;
       
       case 'LAST_SLIDE':
+        console.log('⏭️ Last slide command');
         changeSlide(allSlides.length - 1);
         break;
       
       case 'SHOW_GRID':
+        console.log('📊 Show grid command');
         setActiveTab('slides');
-        setShowGrid(true); // If you have a grid state in this component
+        // Don't toggle - just ensure it's on slides tab
         break;
       
       default:
-        console.warn('Unknown command:', action);
+        console.warn('❓ Unknown command:', action);
     }
   };
 
