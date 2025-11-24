@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Grid, Monitor, X, Clock, List, Settings, Home, Maximize2, Square, Eye, GripVertical, Zap, Activity, ChevronUp, ChevronDown, Smartphone } from 'lucide-react';
 import QRCodeGenerator from '../components/QRCodeGenerator';
 import BackgroundUploader from '../components/BackgroundUploader';
-import { createSession, updateSession, listenToSession } from '../lib/firebase';
+import { createSession, updateSession, listenToSession, clearCommand } from '../lib/firebase';
 
 export default function PresenterControlWorship() {
   const router = useRouter();
@@ -36,6 +36,9 @@ export default function PresenterControlWorship() {
   const [showQRCode, setShowQRCode] = useState(false);
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // 🔥 NEW: Track processed commands to prevent duplicates
+  const [processedCommands, setProcessedCommands] = useState(new Set());
 
   const backgrounds = {
     'gradient-blue': { color: '#1e3a8a', name: 'Deep Blue' },
@@ -86,8 +89,7 @@ export default function PresenterControlWorship() {
     }
   }, [sessionId, allSlides.length]);
 
-  // 🔥 FIREBASE: Listen for remote commands
-  // Listen for remote commands from Firebase
+  // 🔥 FIREBASE: Listen for remote commands - FIXED WITH DEDUPLICATION
   useEffect(() => {
     if (!sessionId) return;
 
@@ -98,14 +100,37 @@ export default function PresenterControlWorship() {
     
       if (data.command) {
         const { action, timestamp } = data.command;
+        const commandId = `${action}-${timestamp}`;
       
-        console.log('🎮 Command detected:', action, 'Timestamp:', timestamp);
+        console.log('🎮 Command detected:', action, 'Timestamp:', timestamp, 'ID:', commandId);
+      
+        // 🔥 Check if already processed
+        if (processedCommands.has(commandId)) {
+          console.log('⏭️ Command already processed, skipping');
+          return;
+        }
       
         // Only process recent commands (within 5 seconds)
         const age = Date.now() - timestamp;
         if (age < 5000) {
           console.log('✅ Processing command (age:', age, 'ms)');
+          
+          // 🔥 Mark as processed BEFORE executing
+          setProcessedCommands(prev => {
+            const newSet = new Set(prev);
+            newSet.add(commandId);
+            return newSet;
+          });
+          
+          // Execute command
           handleRemoteCommand(action);
+          
+          // 🔥 Clear command from Firebase after execution
+          setTimeout(() => {
+            clearCommand(sessionId).catch(err => {
+              console.error('Failed to clear command:', err);
+            });
+          }, 500);
         } else {
           console.log('⏰ Command too old, ignoring (age:', age, 'ms)');
         }
@@ -124,7 +149,7 @@ export default function PresenterControlWorship() {
         unsubscribe();
       }
     };
-  }, [sessionId, currentSlideIndex, allSlides.length]);
+  }, [sessionId, processedCommands]);
 
   // 🔥 FIREBASE: Sync slide changes to Firebase
   useEffect(() => {
@@ -138,7 +163,6 @@ export default function PresenterControlWorship() {
   }, [currentSlideIndex, allSlides.length, sessionId]);
 
   // 🔥 FIREBASE: Handle remote commands
-  // FIXED: Handle remote commands correctly
   const handleRemoteCommand = (action) => {
     console.log('🎮 Remote command received:', action);
   
@@ -165,12 +189,6 @@ export default function PresenterControlWorship() {
       case 'LAST_SLIDE':
         console.log('⏭️ Last slide command');
         changeSlide(allSlides.length - 1);
-        break;
-      
-      case 'SHOW_GRID':
-        console.log('📊 Show grid command');
-        setActiveTab('slides');
-        // Don't toggle - just ensure it's on slides tab
         break;
       
       default:

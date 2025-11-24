@@ -416,3 +416,81 @@ body {
 .delay-1000 {
   animation-delay: 1000ms;
 }
+
+/* Mobile Presentation Fixes */
+@media (max-width: 768px) {
+  /* Smaller controls on mobile */
+  .landscape-only button svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+  
+  .landscape-only .text-3xl {
+    font-size: 1rem !important;
+  }
+  
+  .landscape-only .text-5xl {
+    font-size: 1.5rem !important;
+  }
+  
+  .landscape-only .text-7xl {
+    font-size: 2rem !important;
+  }
+  
+  .landscape-only .text-8xl {
+    font-size: 2.5rem !important;
+  }
+  
+  /* Smaller padding on mobile */
+  .landscape-only .p-6 {
+    padding: 0.75rem !important;
+  }
+  
+  .landscape-only .p-8 {
+    padding: 1rem !important;
+  }
+  
+  /* Smaller rounded corners */
+  .landscape-only .rounded-xl {
+    border-radius: 0.5rem !important;
+  }
+  
+  .landscape-only .rounded-2xl {
+    border-radius: 0.75rem !important;
+  }
+  
+  /* Smaller gaps */
+  .landscape-only .gap-4 {
+    gap: 0.5rem !important;
+  }
+  
+  .landscape-only .gap-6 {
+    gap: 0.75rem !important;
+  }
+}
+
+/* Mobile Landscape Specific */
+@media (max-width: 768px) and (orientation: landscape) {
+  /* Scale down all presenter controls */
+  .landscape-only .absolute.bottom-8 button {
+    padding: 1rem !important;
+  }
+  
+  .landscape-only .absolute.bottom-8 button svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+  
+  .landscape-only .absolute.top-8 {
+    padding: 0.5rem !important;
+  }
+  
+  /* Smaller timer and progress */
+  .landscape-only .font-mono {
+    font-size: 1.25rem !important;
+  }
+  
+  .landscape-only .backdrop-blur-md {
+    padding: 0.75rem !important;
+  }
+}
