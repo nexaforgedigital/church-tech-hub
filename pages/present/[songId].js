@@ -327,22 +327,35 @@ export default function PresentationMode() {
       )}
 
       {/* Main Content */}
+      {/* Main Content - VERTICALLY CENTERED */}
       <div className="flex-1 flex items-center justify-center p-12 relative z-10">
-        <div className="w-full max-w-7xl text-center">
+        <div className="w-full max-w-7xl">
           {currentSlideData.type === 'title' && (
-            <h1 className="text-8xl font-bold drop-shadow-2xl" style={{ fontFamily: font }}>
-              {currentSlideData.content}
-            </h1>
+            <div className="text-center flex items-center justify-center min-h-[60vh]">
+              <h1 className="text-8xl font-bold drop-shadow-2xl" style={{ fontFamily: font }}>
+                {currentSlideData.content}
+              </h1>
+            </div>
           )}
-          
+    
           {currentSlideData.type === 'lyrics' && (
-            <pre className="text-5xl leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" style={{ fontFamily: font, fontSize: `${fontSize}pt` }}>
-              {currentSlideData.content}
-            </pre>
+            <div className="text-center flex items-center justify-center min-h-[60vh]">
+              <pre 
+                className="text-5xl leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" 
+                style={{ 
+                  fontFamily: font, 
+                  fontSize: `${fontSize}pt` 
+                }}
+              >
+                {currentSlideData.content}
+              </pre>
+            </div>
           )}
-          
+    
           {currentSlideData.type === 'end' && (
-            <div className="text-6xl font-bold drop-shadow-2xl opacity-50">•</div>
+            <div className="text-center flex items-center justify-center min-h-[60vh]">
+              <div className="text-6xl font-bold drop-shadow-2xl opacity-50">•</div>
+            </div>
           )}
         </div>
       </div>

@@ -35,6 +35,7 @@ export default function PresenterControlWorship() {
   const [sessionId, setSessionId] = useState('');
   const [showQRCode, setShowQRCode] = useState(false);
   const [remoteConnected, setRemoteConnected] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const backgrounds = {
     'gradient-blue': { color: '#1e3a8a', name: 'Deep Blue' },
@@ -124,26 +125,81 @@ export default function PresenterControlWorship() {
   }, [currentSlideIndex, allSlides.length, sessionId]);
 
   // 🔥 FIREBASE: Handle remote commands
+  // FIXED: Handle remote commands correctly
   const handleRemoteCommand = (action) => {
     console.log('🎮 Remote command received:', action);
+  
     switch(action) {
       case 'NEXT_SLIDE':
-        changeSlide(currentSlideIndex + 1);
+        if (currentSlideIndex < allSlides.length - 1) {
+          changeSlide(currentSlideIndex + 1);
+        }
         break;
+      
       case 'PREV_SLIDE':
-        changeSlide(currentSlideIndex - 1);
+        if (currentSlideIndex > 0) {
+          changeSlide(currentSlideIndex - 1);
+        }
         break;
+      
       case 'FIRST_SLIDE':
         changeSlide(0);
         break;
+      
       case 'LAST_SLIDE':
         changeSlide(allSlides.length - 1);
         break;
+      
       case 'SHOW_GRID':
         setActiveTab('slides');
+        setShowGrid(true); // If you have a grid state in this component
         break;
+      
+      default:
+        console.warn('Unknown command:', action);
     }
   };
+
+  const refreshService = async () => {
+    setRefreshing(true);
+  
+    try {
+      // Reload service items from localStorage or re-fetch
+      const savedService = localStorage.getItem('worship-autosave');
+      if (savedService) {
+        const data = JSON.parse(savedService);
+        setServiceItems(data.items || []);
+      
+        // Regenerate slides
+        await generateAllSlides(data.items || []);
+      
+        console.log('✅ Service refreshed!');
+      }
+    } catch (error) {
+      console.error('Error refreshing service:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Auto-refresh every 10 seconds to check for new songs
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const savedService = localStorage.getItem('worship-autosave');
+      if (savedService) {
+        const data = JSON.parse(savedService);
+        const newItemsCount = data.items?.length || 0;
+        const currentItemsCount = serviceItems.length;
+      
+        if (newItemsCount !== currentItemsCount) {
+          console.log('🔄 New items detected, refreshing...');
+          refreshService();
+        }
+      }
+    }, 10000); // Check every 10 seconds
+  
+    return () => clearInterval(interval);
+  }, [serviceItems.length]);
 
   // Generate slides with useCallback
   const generateAllSlides = useCallback(async (items) => {
@@ -529,6 +585,22 @@ export default function PresenterControlWorship() {
                 </button>
                 <button onClick={() => setElapsedTime(0)} className="p-1 hover:bg-white/10 rounded transition">
                   <RotateCcw size={14} />
+                </button>
+                <button
+                  onClick={refreshService}
+                  disabled={refreshing}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition disabled:opacity-50"
+                  title="Refresh Service"
+                >
+                  <svg 
+                    className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  {refreshing ? 'Refreshing...' : 'Refresh'}
                 </button>
               </div>
             </div>

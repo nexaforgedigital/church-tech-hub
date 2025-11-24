@@ -417,43 +417,58 @@ export default function WorshipPresenter() {
 
         {/* Main Content */}
         <div className="flex-1 flex items-center justify-center p-12 relative z-10">
-          <div className="w-full max-w-7xl animate-fade-in" key={currentSlideIndex}>
+          <div className="w-full max-w-7xl">
             {currentSlide.type === 'song-title' && (
-              <div className="text-center">
-                <h1 className="text-8xl font-bold drop-shadow-2xl leading-tight" style={{ fontFamily: presentSettings.fontFamily }}>
+              <div className="text-center flex items-center justify-center min-h-[60vh]">
+                <h1 className="text-8xl font-bold drop-shadow-2xl leading-tight" style={{ fontFamily: font }}>
                   {currentSlide.content}
                 </h1>
               </div>
             )}
-
+    
             {currentSlide.type === 'song-lyrics' && (
-              <div className="text-center max-w-6xl mx-auto">
-                <pre className="leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" 
-                     style={{ fontSize: `${presentSettings.fontSize}pt`, fontFamily: presentSettings.fontFamily }}>
+              <div className="text-center flex items-center justify-center min-h-[60vh]">
+                <pre 
+                  className="text-5xl leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" 
+                  style={{ 
+                    fontFamily: font, 
+                    fontSize: `${fontSize}pt`
+                  }}
+                >
                   {currentSlide.content}
                 </pre>
               </div>
             )}
-
+    
             {currentSlide.type === 'verse' && (
-              <div className="text-center max-w-5xl mx-auto">
-                <div className="text-5xl font-bold mb-10 text-yellow-300 drop-shadow-xl" style={{ fontFamily: presentSettings.fontFamily }}>
-                  {currentSlide.reference}
-                </div>
-                <div className="text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: presentSettings.fontFamily }}>
-                  {currentSlide.content}
+              <div className="text-center flex items-center justify-center min-h-[60vh]">
+                <div>
+                  <div className="text-5xl font-bold mb-10 text-yellow-300 drop-shadow-xl" style={{ fontFamily: font }}>
+                    {currentSlide.reference}
+                  </div>
+                  <div className="text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: font }}>
+                    {currentSlide.content}
+                  </div>
                 </div>
               </div>
             )}
-
+    
             {currentSlide.type === 'announcement' && (
-              <div className="text-center max-w-6xl mx-auto">
-                <div className="text-7xl font-bold mb-12 drop-shadow-2xl" style={{ fontFamily: presentSettings.fontFamily }}>
-                  {currentSlide.title}
+              <div className="text-center flex items-center justify-center min-h-[60vh]">
+                <div className="max-w-6xl">
+                  <div className="text-7xl font-bold mb-12 drop-shadow-2xl" style={{ fontFamily: font }}>
+                    {currentSlide.title}
+                  </div>
+                  <div className="text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: font }}>
+                    {currentSlide.content}
+                  </div>
                 </div>
-                <div className="text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: presentSettings.fontFamily }}>
-                  {currentSlide.content}
-                </div>
+              </div>
+            )}
+    
+            {currentSlide.type === 'end' && (
+              <div className="text-center flex items-center justify-center min-h-[60vh]">
+                <div className="text-6xl font-bold drop-shadow-2xl opacity-50">•</div>
               </div>
             )}
           </div>
