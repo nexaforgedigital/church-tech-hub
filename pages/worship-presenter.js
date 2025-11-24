@@ -7,7 +7,7 @@ import { songStorage } from '../utils/songStorage';
 
 export default function WorshipPresenter() {
   const router = useRouter();
-  const { service, settings, controlMode } = router.query;
+  const { service, settings, controlMode, startIndex } = router.query; // 🔥 Added startIndex
   
   const [serviceItems, setServiceItems] = useState([]);
   const [allSlides, setAllSlides] = useState([]);
@@ -28,6 +28,9 @@ export default function WorshipPresenter() {
   });
   const [isReady, setIsReady] = useState(false);
   const slideChangeTimeoutRef = useRef(null);
+  
+  // 🔥 NEW: Black screen state
+  const [isBlackScreen, setIsBlackScreen] = useState(false);
 
   const backgrounds = {
     'gradient-blue': '#1e3a8a',
@@ -38,7 +41,7 @@ export default function WorshipPresenter() {
     'dark-blue': '#1e293b',
   };
 
-  // Generate slides with useCallback
+  // 🔥 FIXED: Generate slides with custom song support
   const generateAllSlides = useCallback(async (items) => {
     const slides = [];
     const displayMode = presentSettings.displayMode || 'tamil-transliteration';
@@ -52,7 +55,7 @@ export default function WorshipPresenter() {
         try {
           let song;
           
-          // Check if it's a custom song
+          // 🔥 FIX: Check if it's a custom song
           if (item.data.id && item.data.id.toString().startsWith('custom-')) {
             const customSongs = songStorage.getCustomSongs();
             song = customSongs.find(s => s.id === item.data.id);
@@ -218,6 +221,17 @@ export default function WorshipPresenter() {
     }
   }, [service, settings]);
 
+  // 🔥 NEW: Set initial slide from URL parameter
+  useEffect(() => {
+    if (startIndex && allSlides.length > 0) {
+      const index = parseInt(startIndex);
+      if (index >= 0 && index < allSlides.length) {
+        console.log('🎬 Starting from slide:', index + 1);
+        setCurrentSlideIndex(index);
+      }
+    }
+  }, [startIndex, allSlides.length]);
+
   // Regenerate slides when display mode changes
   useEffect(() => {
     if (serviceItems.length > 0) {
@@ -275,6 +289,10 @@ export default function WorshipPresenter() {
             timestamp: Date.now()
           }, '*');
         }
+      } else if (event.data.type === 'TOGGLE_BLACK_SCREEN') {
+        // 🔥 NEW: Handle black screen toggle
+        console.log('⚫ Main: Toggling black screen to:', event.data.value);
+        setIsBlackScreen(event.data.value);
       }
     };
     
@@ -293,20 +311,11 @@ export default function WorshipPresenter() {
     return () => clearInterval(interval);
   }, [isTimerRunning]);
 
-  // Auto fullscreen - with user gesture check
+  // Manual fullscreen button instead of auto
   useEffect(() => {
-    const attemptFullscreen = async () => {
-      try {
-        await document.documentElement.requestFullscreen();
-        setIsFullscreen(true);
-      } catch (err) {
-        console.log('Fullscreen not supported or blocked');
-      }
-    };
-
-    // Try after a short delay
-    const timer = setTimeout(attemptFullscreen, 500);
-    return () => clearTimeout(timer);
+    // Show controls on load so user can click fullscreen button
+    setShowControls(true);
+    setTimeout(() => setShowControls(false), 5000); // Hide after 5 seconds
   }, []);
 
   // Show controls on mouse move
@@ -354,6 +363,9 @@ export default function WorshipPresenter() {
       } else if (e.key === 'End') {
         e.preventDefault();
         goToSlide(allSlides.length - 1);
+      } else if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        setIsBlackScreen(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyPress);
@@ -463,263 +475,287 @@ export default function WorshipPresenter() {
     <>
       <LandscapePrompt />
       <div className="landscape-only h-screen flex flex-col text-white relative overflow-hidden">
-        {/* Background - Video or Color */}
-        {presentSettings.backgroundType === 'video' || presentSettings.backgroundType === 'image' ? (
-          <VideoBackground 
-            src={presentSettings.backgroundSrc} 
-            type={presentSettings.backgroundType}
-            opacity={0.6}
-            loop={true}
-          />
+        {/* 🔥 NEW: Black Screen Overlay */}
+        {isBlackScreen ? (
+          <div className="absolute inset-0 bg-black z-50 flex items-center justify-center">
+            <div className="text-gray-800 text-6xl">⚫</div>
+          </div>
         ) : (
-          <div className="absolute inset-0" style={{ backgroundColor: currentBgColor }}>
-            <div className="absolute inset-0 opacity-10 pointer-events-none">
-              <div className="absolute top-0 left-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
-              <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white rounded-full blur-3xl"></div>
-            </div>
-          </div>
-        )}
-
-        {/* Main Content - VERTICALLY CENTERED */}
-        <div className="flex-1 flex items-center justify-center p-12 relative z-10">
-          <div className="w-full max-w-7xl animate-fade-in" key={currentSlideIndex}>
-            {currentSlide.type === 'song-title' && (
-              <div className="text-center flex items-center justify-center min-h-[60vh]">
-                <h1 className="text-8xl font-bold drop-shadow-2xl leading-tight" style={{ fontFamily: currentFont }}>
-                  {currentSlide.content}
-                </h1>
-              </div>
-            )}
-
-            {currentSlide.type === 'song-lyrics' && (
-              <div className="text-center flex items-center justify-center min-h-[60vh]">
-                <pre 
-                  className="leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" 
-                  style={{ 
-                    fontSize: `${currentFontSize}pt`, 
-                    fontFamily: currentFont 
-                  }}
-                >
-                  {currentSlide.content}
-                </pre>
-              </div>
-            )}
-
-            {currentSlide.type === 'verse' && (
-              <div className="text-center flex items-center justify-center min-h-[60vh]">
-                <div className="max-w-5xl">
-                  <div className="text-5xl font-bold mb-10 text-yellow-300 drop-shadow-xl" style={{ fontFamily: currentFont }}>
-                    {currentSlide.reference}
-                  </div>
-                  <div className="text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: currentFont }}>
-                    {currentSlide.content}
-                  </div>
+          <>
+            {/* Background - Video or Color */}
+            {presentSettings.backgroundType === 'video' || presentSettings.backgroundType === 'image' ? (
+              <VideoBackground 
+                src={presentSettings.backgroundSrc} 
+                type={presentSettings.backgroundType}
+                opacity={0.6}
+                loop={true}
+              />
+            ) : (
+              <div className="absolute inset-0" style={{ backgroundColor: currentBgColor }}>
+                <div className="absolute inset-0 opacity-10 pointer-events-none">
+                  <div className="absolute top-0 left-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+                  <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white rounded-full blur-3xl"></div>
                 </div>
               </div>
             )}
 
-            {currentSlide.type === 'announcement' && (
-              <div className="text-center flex items-center justify-center min-h-[60vh]">
-                <div className="max-w-6xl">
-                  <div className="text-7xl font-bold mb-12 drop-shadow-2xl" style={{ fontFamily: currentFont }}>
-                    {currentSlide.title}
+            {/* Main Content - VERTICALLY CENTERED */}
+            <div className="flex-1 flex items-center justify-center p-6 relative z-10">
+              <div className="w-full max-w-7xl animate-fade-in" key={currentSlideIndex}>
+                {currentSlide.type === 'song-title' && (
+                  <div className="text-center flex items-center justify-center min-h-[60vh]">
+                    <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold drop-shadow-2xl leading-tight" style={{ fontFamily: currentFont }}>
+                    </h1>
                   </div>
-                  <div className="text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: currentFont }}>
-                    {currentSlide.content}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+                )}
 
-        {/* Slide Grid View */}
-        {showGrid && (
-          <div className="absolute inset-0 bg-black/95 backdrop-blur-sm z-50 overflow-y-auto p-8 animate-fade-in">
-            <div className="container mx-auto max-w-7xl">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-5xl font-bold mb-2">All Slides</h2>
-                  <p className="text-xl text-gray-300">Click any slide to jump to it • Press ESC to close</p>
-                </div>
-                <button onClick={() => setShowGrid(false)} className="bg-red-600 hover:bg-red-700 p-5 rounded-full transition shadow-2xl">
-                  <X size={32} />
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {allSlides.map((slide, index) => (
-                  <button
-                    key={index}
-                    onClick={() => goToSlide(index)}
-                    className={`relative aspect-video rounded-xl overflow-hidden border-4 transition transform hover:scale-105 ${
-                      currentSlideIndex === index 
-                        ? 'border-yellow-400 shadow-2xl shadow-yellow-400/50 scale-105 ring-4 ring-yellow-400/30' 
-                        : 'border-white/20 hover:border-white/50'
-                    }`}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center p-3" style={{ backgroundColor: currentBgColor }}>
-                      {slide.type === 'song-title' && (
-                        <div className="text-center">
-                          <div className="text-sm font-bold line-clamp-3">{slide.content}</div>
-                        </div>
-                      )}
-                      {slide.type === 'song-lyrics' && (
-                        <div className="text-xs line-clamp-4 leading-tight">{slide.content}</div>
-                      )}
-                      {slide.type === 'verse' && (
-                        <div className="text-center">
-                          <div className="text-xs font-bold text-yellow-300 mb-1">{slide.reference}</div>
-                          <div className="text-xs line-clamp-3">{slide.content}</div>
-                        </div>
-                      )}
-                      {slide.type === 'announcement' && (
-                        <div className="text-center">
-                          <div className="text-sm font-bold mb-1">{slide.title}</div>
-                          <div className="text-xs line-clamp-2">{slide.content}</div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="absolute top-2 left-2 bg-black/70 px-2 py-1 rounded text-xs font-bold">
-                      {index + 1}
-                    </div>
-                    
-                    {currentSlideIndex === index && (
-                      <div className="absolute top-2 right-2 bg-yellow-400 text-black px-2 py-1 rounded text-xs font-bold animate-pulse">
-                        LIVE
-                      </div>
-                    )}
-
-                    <div className="absolute bottom-2 left-2 right-2 bg-black/70 px-2 py-1 rounded text-xs truncate">
-                      {slide.itemTitle}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Item List View */}
-        {showItemList && (
-          <div className="absolute inset-0 bg-black/95 backdrop-blur-sm z-50 overflow-y-auto p-8 animate-fade-in">
-            <div className="container mx-auto max-w-5xl">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-5xl font-bold mb-2">Service Items</h2>
-                  <p className="text-xl text-gray-300">Jump to any item • Press ESC to close</p>
-                </div>
-                <button onClick={() => setShowItemList(false)} className="bg-red-600 hover:bg-red-700 p-5 rounded-full transition shadow-2xl">
-                  <X size={32} />
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                {Object.entries(groupedSlides).map(([itemIndex, data]) => {
-                  const isCurrentItem = data.slides.some(slide => allSlides.indexOf(slide) === currentSlideIndex);
-                  return (
-                    <button
-                      key={itemIndex}
-                      onClick={() => goToItem(parseInt(itemIndex))}
-                      className={`w-full text-left p-8 rounded-2xl transition transform hover:scale-102 shadow-xl ${
-                        isCurrentItem 
-                          ? 'bg-gradient-to-r from-yellow-500 to-orange-500 shadow-2xl shadow-yellow-500/50 ring-4 ring-yellow-400/30' 
-                          : 'bg-white/10 hover:bg-white/20'
-                      }`}
+                {currentSlide.type === 'song-lyrics' && (
+                  <div className="text-center flex items-center justify-center min-h-[60vh] max-w-6xl mx-auto">
+                    <pre 
+                      className="leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl text-3xl md:text-4xl lg:text-5xl" 
+                      style={{ 
+                        fontSize: `${currentFontSize}pt`, 
+                        fontFamily: currentFont 
+                      }}
                     >
-                      <div className="flex items-center gap-6">
-                        <div className={`text-5xl font-bold ${isCurrentItem ? 'text-white' : 'text-gray-400'}`}>
-                          {parseInt(itemIndex) + 1}
+                      {currentSlide.content}
+                    </pre>
+                  </div>
+                )}
+
+                {currentSlide.type === 'verse' && (
+                  <div className="text-center flex items-center justify-center min-h-[60vh]">
+                    <div className="max-w-5xl mx-auto px-6">
+                      <div className="text-3xl md:text-4xl lg:text-5xl font-bold mb-8 text-yellow-300 drop-shadow-xl" style={{ fontFamily: currentFont }}>
+                        {currentSlide.reference}
+                      </div>
+                      <div className="text-3xl md:text-4xl lg:text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: currentFont }}>
+                        {currentSlide.reference}
+                      </div>
+                      <div className="text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: currentFont }}>
+                        {currentSlide.content}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentSlide.type === 'announcement' && (
+                  <div className="text-center flex items-center justify-center min-h-[60vh]">
+                    <div className="max-w-6xl mx-auto px-6">
+                      <div className="text-4xl md:text-6xl lg:text-7xl font-bold mb-8 drop-shadow-2xl" style={{ fontFamily: currentFont }}>
+                        {currentSlide.title}
+                      </div>
+                      <div className="text-3xl md:text-4xl lg:text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: currentFont }}>
+                        {currentSlide.title}
+                      </div>
+                      <div className="text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: currentFont }}>
+                        {currentSlide.content}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Slide Grid View */}
+            {showGrid && (
+              <div className="absolute inset-0 bg-black/95 backdrop-blur-sm z-50 overflow-y-auto p-8 animate-fade-in">
+                <div className="container mx-auto max-w-7xl">
+                  <div className="flex justify-between items-center mb-8">
+                    <div>
+                      <h2 className="text-5xl font-bold mb-2">All Slides</h2>
+                      <p className="text-xl text-gray-300">Click any slide to jump to it • Press ESC to close</p>
+                    </div>
+                    <button onClick={() => setShowGrid(false)} className="bg-red-600 hover:bg-red-700 p-5 rounded-full transition shadow-2xl">
+                      <X size={32} />
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {allSlides.map((slide, index) => (
+                      <button
+                        key={index}
+                        onClick={() => goToSlide(index)}
+                        className={`relative aspect-video rounded-xl overflow-hidden border-4 transition transform hover:scale-105 ${
+                          currentSlideIndex === index 
+                            ? 'border-yellow-400 shadow-2xl shadow-yellow-400/50 scale-105 ring-4 ring-yellow-400/30' 
+                            : 'border-white/20 hover:border-white/50'
+                        }`}
+                      >
+                        <div className="absolute inset-0 flex items-center justify-center p-3" style={{ backgroundColor: currentBgColor }}>
+                          {slide.type === 'song-title' && (
+                            <div className="text-center">
+                              <div className="text-sm font-bold line-clamp-3">{slide.content}</div>
+                            </div>
+                          )}
+                          {slide.type === 'song-lyrics' && (
+                            <div className="text-xs line-clamp-4 leading-tight">{slide.content}</div>
+                          )}
+                          {slide.type === 'verse' && (
+                            <div className="text-center">
+                              <div className="text-xs font-bold text-yellow-300 mb-1">{slide.reference}</div>
+                              <div className="text-xs line-clamp-3">{slide.content}</div>
+                            </div>
+                          )}
+                          {slide.type === 'announcement' && (
+                            <div className="text-center">
+                              <div className="text-sm font-bold mb-1">{slide.title}</div>
+                              <div className="text-xs line-clamp-2">{slide.content}</div>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex-1">
-                          <div className="text-3xl font-bold mb-2">
-                            {data.item.type === 'song' ? data.item.data.title : 
-                             data.item.type === 'verse' ? data.item.data.reference : 
-                             data.item.data.title}
-                          </div>
-                          <div className="text-lg opacity-75">
-                            {data.slides.length} slide{data.slides.length !== 1 ? 's' : ''} • {data.item.type}
-                          </div>
+                        
+                        <div className="absolute top-2 left-2 bg-black/70 px-2 py-1 rounded text-xs font-bold">
+                          {index + 1}
                         </div>
-                        {isCurrentItem && (
-                          <div className="bg-white text-black px-4 py-2 rounded-full text-lg font-bold">
-                            ▶ CURRENT
+                        
+                        {currentSlideIndex === index && (
+                          <div className="absolute top-2 right-2 bg-yellow-400 text-black px-2 py-1 rounded text-xs font-bold animate-pulse">
+                            LIVE
                           </div>
                         )}
-                      </div>
+
+                        <div className="absolute bottom-2 left-2 right-2 bg-black/70 px-2 py-1 rounded text-xs truncate">
+                          {slide.itemTitle}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Item List View */}
+            {showItemList && (
+              <div className="absolute inset-0 bg-black/95 backdrop-blur-sm z-50 overflow-y-auto p-8 animate-fade-in">
+                <div className="container mx-auto max-w-5xl">
+                  <div className="flex justify-between items-center mb-8">
+                    <div>
+                      <h2 className="text-5xl font-bold mb-2">Service Items</h2>
+                      <p className="text-xl text-gray-300">Jump to any item • Press ESC to close</p>
+                    </div>
+                    <button onClick={() => setShowItemList(false)} className="bg-red-600 hover:bg-red-700 p-5 rounded-full transition shadow-2xl">
+                      <X size={32} />
                     </button>
-                  );
-                })}
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {Object.entries(groupedSlides).map(([itemIndex, data]) => {
+                      const isCurrentItem = data.slides.some(slide => allSlides.indexOf(slide) === currentSlideIndex);
+                      return (
+                        <button
+                          key={itemIndex}
+                          onClick={() => goToItem(parseInt(itemIndex))}
+                          className={`w-full text-left p-8 rounded-2xl transition transform hover:scale-102 shadow-xl ${
+                            isCurrentItem 
+                              ? 'bg-gradient-to-r from-yellow-500 to-orange-500 shadow-2xl shadow-yellow-500/50 ring-4 ring-yellow-400/30' 
+                              : 'bg-white/10 hover:bg-white/20'
+                          }`}
+                        >
+                          <div className="flex items-center gap-6">
+                            <div className={`text-5xl font-bold ${isCurrentItem ? 'text-white' : 'text-gray-400'}`}>
+                              {parseInt(itemIndex) + 1}
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-3xl font-bold mb-2">
+                                {data.item.type === 'song' ? data.item.data.title : 
+                                 data.item.type === 'verse' ? data.item.data.reference : 
+                                 data.item.data.title}
+                              </div>
+                              <div className="text-lg opacity-75">
+                                {data.slides.length} slide{data.slides.length !== 1 ? 's' : ''} • {data.item.type}
+                              </div>
+                            </div>
+                            {isCurrentItem && (
+                              <div className="bg-white text-black px-4 py-2 rounded-full text-lg font-bold">
+                                ▶ CURRENT
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
+            )}
+
+            {/* Controls */}
+            <div className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+              <button onClick={prevSlide} disabled={currentSlideIndex === 0} className="absolute bottom-8 left-8 bg-white/20 hover:bg-white/40 backdrop-blur-md p-6 rounded-full transition disabled:opacity-20 pointer-events-auto shadow-2xl">
+                <ChevronLeft size={40} />
+              </button>
+
+              <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 pointer-events-auto">
+                <button onClick={() => { setShowItemList(!showItemList); setShowGrid(false); }} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
+                  <List size={28} />
+                </button>
+                <button onClick={() => { setShowGrid(!showGrid); setShowItemList(false); }} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
+                  <Grid size={28} />
+                </button>
+                <button onClick={toggleFullscreen} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
+                  {isFullscreen ? <Minimize size={28} /> : <Maximize size={28} />}
+                </button>
+              </div>
+
+              <button onClick={nextSlide} disabled={currentSlideIndex === allSlides.length - 1} className="absolute bottom-8 right-8 bg-white/20 hover:bg-white/40 backdrop-blur-md p-6 rounded-full transition disabled:opacity-20 pointer-events-auto shadow-2xl">
+                <ChevronRight size={40} />
+              </button>
+
+              <div className="absolute top-8 left-8 space-y-3 pointer-events-auto">
+                <div className="bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl flex items-center gap-4 shadow-2xl">
+                  <Clock size={28} />
+                  <span className="font-mono text-3xl font-bold">{formatTime(elapsedTime)}</span>
+                  <button onClick={() => setIsTimerRunning(!isTimerRunning)} className="ml-2 p-2 hover:bg-white/20 rounded-lg transition">
+                    {isTimerRunning ? <Pause size={20} /> : <Play size={20} />}
+                  </button>
+                  <button onClick={() => setElapsedTime(0)} className="p-2 hover:bg-white/20 rounded-lg transition">
+                    <RotateCcw size={20} />
+                  </button>
+                </div>
+                
+                <div className="bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl shadow-2xl">
+                  <div className="text-sm opacity-75 mb-1">Current Item</div>
+                  <div className="font-bold text-xl">{currentSlide.itemTitle}</div>
+                </div>
+              </div>
+
+              <div className="absolute top-8 right-8 bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl pointer-events-auto shadow-2xl">
+                <div className="text-sm opacity-75 mb-3">Progress</div>
+                <div className="flex items-center gap-4">
+                  <div className="text-3xl font-bold">
+                    {currentSlideIndex + 1} / {allSlides.length}
+                  </div>
+                  <div className="w-48 h-3 bg-white/20 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-green-400 via-blue-500 to-purple-500 transition-all duration-300"
+                      style={{ width: `${((currentSlideIndex + 1) / allSlides.length) * 100}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-lg font-semibold">
+                    {Math.round(((currentSlideIndex + 1) / allSlides.length) * 100)}%
+                  </div>
+                </div>
+              </div>
+
+              {!isFullscreen && (
+                <button 
+                  onClick={toggleFullscreen} 
+                  className="absolute top-8 left-1/2 transform -translate-x-1/2 -translate-y-16 bg-blue-600/40 hover:bg-blue-600/60 backdrop-blur-md px-8 py-4 rounded-full transition pointer-events-auto shadow-2xl flex items-center gap-3"
+                >
+                  <Maximize size={24} />
+                  <span className="font-semibold text-lg">Enter Fullscreen</span>
+                </button>
+              )}
+
+              <button onClick={exitPresentation} className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-red-600/40 hover:bg-red-600/60 backdrop-blur-md px-8 py-4 rounded-full transition pointer-events-auto shadow-2xl flex items-center gap-3">
+                <X size={24} />
+                <span className="font-semibold text-lg">Exit</span>
+              </button>
             </div>
-          </div>
+          </>
         )}
-
-        {/* Controls */}
-        <div className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-          <button onClick={prevSlide} disabled={currentSlideIndex === 0} className="absolute bottom-8 left-8 bg-white/20 hover:bg-white/40 backdrop-blur-md p-6 rounded-full transition disabled:opacity-20 pointer-events-auto shadow-2xl">
-            <ChevronLeft size={40} />
-          </button>
-
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 pointer-events-auto">
-            <button onClick={() => { setShowItemList(!showItemList); setShowGrid(false); }} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
-              <List size={28} />
-            </button>
-            <button onClick={() => { setShowGrid(!showGrid); setShowItemList(false); }} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
-              <Grid size={28} />
-            </button>
-            <button onClick={toggleFullscreen} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
-              {isFullscreen ? <Minimize size={28} /> : <Maximize size={28} />}
-            </button>
-          </div>
-
-          <button onClick={nextSlide} disabled={currentSlideIndex === allSlides.length - 1} className="absolute bottom-8 right-8 bg-white/20 hover:bg-white/40 backdrop-blur-md p-6 rounded-full transition disabled:opacity-20 pointer-events-auto shadow-2xl">
-            <ChevronRight size={40} />
-          </button>
-
-          <div className="absolute top-8 left-8 space-y-3 pointer-events-auto">
-            <div className="bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl flex items-center gap-4 shadow-2xl">
-              <Clock size={28} />
-              <span className="font-mono text-3xl font-bold">{formatTime(elapsedTime)}</span>
-              <button onClick={() => setIsTimerRunning(!isTimerRunning)} className="ml-2 p-2 hover:bg-white/20 rounded-lg transition">
-                {isTimerRunning ? <Pause size={20} /> : <Play size={20} />}
-              </button>
-              <button onClick={() => setElapsedTime(0)} className="p-2 hover:bg-white/20 rounded-lg transition">
-                <RotateCcw size={20} />
-              </button>
-            </div>
-            
-            <div className="bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl shadow-2xl">
-              <div className="text-sm opacity-75 mb-1">Current Item</div>
-              <div className="font-bold text-xl">{currentSlide.itemTitle}</div>
-            </div>
-          </div>
-
-          <div className="absolute top-8 right-8 bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl pointer-events-auto shadow-2xl">
-            <div className="text-sm opacity-75 mb-3">Progress</div>
-            <div className="flex items-center gap-4">
-              <div className="text-3xl font-bold">
-                {currentSlideIndex + 1} / {allSlides.length}
-              </div>
-              <div className="w-48 h-3 bg-white/20 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-green-400 via-blue-500 to-purple-500 transition-all duration-300"
-                  style={{ width: `${((currentSlideIndex + 1) / allSlides.length) * 100}%` }}
-                ></div>
-              </div>
-              <div className="text-lg font-semibold">
-                {Math.round(((currentSlideIndex + 1) / allSlides.length) * 100)}%
-              </div>
-            </div>
-          </div>
-
-          <button onClick={exitPresentation} className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-red-600/40 hover:bg-red-600/60 backdrop-blur-md px-8 py-4 rounded-full transition pointer-events-auto shadow-2xl flex items-center gap-3">
-            <X size={24} />
-            <span className="font-semibold text-lg">Exit</span>
-          </button>
-        </div>
 
         <style jsx>{`
           @keyframes fade-in {

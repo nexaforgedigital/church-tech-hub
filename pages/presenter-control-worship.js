@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Grid, Monitor, X, Clock, List, Settings, Home, Maximize2, Square, Eye, GripVertical, Zap, Activity, ChevronUp, ChevronDown, Smartphone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Grid, Monitor, X, Clock, List, Settings, Home, Maximize2, Square, Eye, GripVertical, Zap, Activity, Smartphone, Search, History } from 'lucide-react';
 import QRCodeGenerator from '../components/QRCodeGenerator';
 import BackgroundUploader from '../components/BackgroundUploader';
 import { createSession, updateSession, listenToSession, clearCommand } from '../lib/firebase';
+import { songStorage } from '../utils/songStorage';
 
 export default function PresenterControlWorship() {
   const router = useRouter();
@@ -39,6 +40,11 @@ export default function PresenterControlWorship() {
   
   // 🔥 NEW: Track processed commands to prevent duplicates
   const [processedCommands, setProcessedCommands] = useState(new Set());
+  
+  // 🔥 NEW FEATURES
+  const [isBlackScreen, setIsBlackScreen] = useState(false);
+  const [slideHistory, setSlideHistory] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const backgrounds = {
     'gradient-blue': { color: '#1e3a8a', name: 'Deep Blue' },
@@ -191,6 +197,11 @@ export default function PresenterControlWorship() {
         changeSlide(allSlides.length - 1);
         break;
       
+      case 'BLACK_SCREEN':
+        console.log('⚫ Black screen command');
+        toggleBlackScreen();
+        break;
+      
       default:
         console.warn('❓ Unknown command:', action);
     }
@@ -237,7 +248,7 @@ export default function PresenterControlWorship() {
     return () => clearInterval(interval);
   }, [serviceItems.length]);
 
-  // Generate slides with useCallback
+  // 🔥 FIXED: Generate slides with custom song support
   const generateAllSlides = useCallback(async (items) => {
     const slides = [];
     const displayMode = presentSettings.displayMode || 'tamil-transliteration';
@@ -249,9 +260,37 @@ export default function PresenterControlWorship() {
       
       if (item.type === 'song') {
         try {
-          const response = await fetch(`/api/songs/${item.data.id}`);
-          const song = await response.json();
+          let song;
           
+          // 🔥 FIX: Check if it's a custom song FIRST
+          if (item.data.id && item.data.id.toString().startsWith('custom-')) {
+            console.log('📦 Loading custom song:', item.data.id);
+            const customSongs = songStorage.getCustomSongs();
+            song = customSongs.find(s => s.id === item.data.id);
+            
+            if (!song) {
+              console.error('❌ Custom song not found:', item.data.id);
+              continue; // Skip this song
+            }
+            console.log('✅ Custom song loaded:', song.title);
+          } else {
+            // Regular song from API
+            console.log('🌐 Fetching song from API:', item.data.id);
+            const response = await fetch(`/api/songs/${item.data.id}`);
+            if (!response.ok) {
+              console.error('❌ Failed to fetch song:', item.data.id);
+              continue;
+            }
+            song = await response.json();
+          }
+          
+          // 🔥 FIX: Validate song has lyrics
+          if (!song.lyrics || !song.lyrics.tamil || !song.lyrics.transliteration) {
+            console.error('❌ Song missing lyrics:', song.title);
+            continue;
+          }
+          
+          // Add title slide
           slides.push({
             type: 'song-title',
             content: song.title,
@@ -261,51 +300,80 @@ export default function PresenterControlWorship() {
             notes: item.notes || ''
           });
 
-          for (let i = 0; i < song.lyrics.tamil.length; i += 2) {
+          // Generate lyric slides
+          const maxLines = Math.max(
+            song.lyrics.tamil?.length || 0,
+            song.lyrics.transliteration?.length || 0,
+            song.lyrics.english?.length || 0
+          );
+
+          for (let i = 0; i < maxLines; i += 2) {
             let content = '';
             
-            for (let j = 0; j < 2 && (i + j) < song.lyrics.tamil.length; j++) {
+            for (let j = 0; j < 2 && (i + j) < maxLines; j++) {
               const lineIndex = i + j;
               
               switch(displayMode) {
                 case 'tamil-only':
-                  content += song.lyrics.tamil[lineIndex].text + '\n\n';
+                  if (song.lyrics.tamil[lineIndex]) {
+                    content += song.lyrics.tamil[lineIndex].text + '\n\n';
+                  }
                   break;
                 case 'transliteration-only':
-                  content += song.lyrics.transliteration[lineIndex].text + '\n\n';
+                  if (song.lyrics.transliteration[lineIndex]) {
+                    content += song.lyrics.transliteration[lineIndex].text + '\n\n';
+                  }
                   break;
                 case 'english-only':
-                  content += song.lyrics.english[lineIndex].text + '\n\n';
+                  if (song.lyrics.english && song.lyrics.english[lineIndex]) {
+                    content += song.lyrics.english[lineIndex].text + '\n\n';
+                  }
                   break;
                 case 'tamil-english':
-                  content += song.lyrics.tamil[lineIndex].text + '\n';
-                  content += song.lyrics.english[lineIndex].text + '\n\n';
+                  if (song.lyrics.tamil[lineIndex]) {
+                    content += song.lyrics.tamil[lineIndex].text + '\n';
+                  }
+                  if (song.lyrics.english && song.lyrics.english[lineIndex]) {
+                    content += song.lyrics.english[lineIndex].text + '\n\n';
+                  }
                   break;
                 case 'all':
-                  content += song.lyrics.tamil[lineIndex].text + '\n';
-                  content += song.lyrics.transliteration[lineIndex].text + '\n';
-                  content += song.lyrics.english[lineIndex].text + '\n\n';
+                  if (song.lyrics.tamil[lineIndex]) {
+                    content += song.lyrics.tamil[lineIndex].text + '\n';
+                  }
+                  if (song.lyrics.transliteration[lineIndex]) {
+                    content += song.lyrics.transliteration[lineIndex].text + '\n';
+                  }
+                  if (song.lyrics.english && song.lyrics.english[lineIndex]) {
+                    content += song.lyrics.english[lineIndex].text + '\n\n';
+                  }
                   break;
                 case 'tamil-transliteration':
                 default:
-                  content += song.lyrics.tamil[lineIndex].text + '\n';
-                  content += song.lyrics.transliteration[lineIndex].text + '\n\n';
+                  if (song.lyrics.tamil[lineIndex]) {
+                    content += song.lyrics.tamil[lineIndex].text + '\n';
+                  }
+                  if (song.lyrics.transliteration[lineIndex]) {
+                    content += song.lyrics.transliteration[lineIndex].text + '\n\n';
+                  }
                   break;
               }
             }
             
-            slides.push({
-              type: 'song-lyrics',
-              content: content.trim(),
-              itemIndex,
-              itemTitle: song.title,
-              itemType: 'song',
-              notes: item.notes || '',
-              displayMode: displayMode
-            });
+            if (content.trim()) {
+              slides.push({
+                type: 'song-lyrics',
+                content: content.trim(),
+                itemIndex,
+                itemTitle: song.title,
+                itemType: 'song',
+                notes: item.notes || '',
+                displayMode: displayMode
+              });
+            }
           }
         } catch (error) {
-          console.error('Error fetching song:', error);
+          console.error('❌ Error processing song:', error);
         }
       } else if (item.type === 'verse') {
         slides.push({
@@ -330,6 +398,7 @@ export default function PresenterControlWorship() {
       }
     }
     
+    console.log('✅ Generated', slides.length, 'slides');
     setAllSlides(slides);
   }, [presentSettings.displayMode]);
 
@@ -395,6 +464,26 @@ export default function PresenterControlWorship() {
     }
   }, [currentSlideIndex, activeTab]);
 
+  // 🔥 NEW: Track slide history
+  useEffect(() => {
+    setSlideHistory(prev => {
+      const newHistory = [currentSlideIndex, ...prev.filter(i => i !== currentSlideIndex)];
+      return newHistory.slice(0, 5); // Keep last 5
+    });
+  }, [currentSlideIndex]);
+
+  // 🔥 NEW: Quick search
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const found = allSlides.findIndex(s => 
+        s.itemTitle.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      if (found !== -1 && found !== currentSlideIndex) {
+        changeSlide(found);
+      }
+    }
+  }, [searchQuery]);
+
   // Keyboard controls
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -417,6 +506,9 @@ export default function PresenterControlWorship() {
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         changeSlide(currentSlideIndex + 1);
+      } else if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        toggleBlackScreen();
       }
     };
     window.addEventListener('keydown', handleKeyPress);
@@ -491,27 +583,60 @@ export default function PresenterControlWorship() {
     }
   };
 
+  // 🔥 NEW: Black screen toggle
+  const toggleBlackScreen = () => {
+    const newValue = !isBlackScreen;
+    setIsBlackScreen(newValue);
+    if (mainWindowRef && !mainWindowRef.closed) {
+      mainWindowRef.postMessage({
+        type: 'TOGGLE_BLACK_SCREEN',
+        value: newValue,
+        timestamp: Date.now()
+      }, '*');
+      console.log('⚫ Black screen:', newValue ? 'ON' : 'OFF');
+    }
+  };
+
+  // 🔥 FIXED: Start from current slide
   const openMainPresentation = () => {
     if (serviceItems.length === 0) {
       alert('No service items to present!');
       return;
     }
+    
+    // 🔥 NEW: Ask user where to start
+    const startFromCurrent = window.confirm(
+      `Start presentation from current slide (${currentSlideIndex + 1}/${allSlides.length})?\n\n` +
+      `Click OK to start from current slide\n` +
+      `Click Cancel to start from beginning`
+    );
+    
+    const startIndex = startFromCurrent ? currentSlideIndex : 0;
+    console.log('🎬 Starting presentation from slide:', startIndex + 1);
+    
     setConnectionStatus('connecting');
     const params = new URLSearchParams({
       service: service,
       settings: JSON.stringify(presentSettings),
-      controlMode: 'true'
+      controlMode: 'true',
+      startIndex: startIndex.toString() // 🔥 Pass start index
     });
+    
     const mainWindow = window.open(
       `/worship-presenter?${params.toString()}`,
       'mainPresentation',
       'fullscreen=yes,scrollbars=no,menubar=no,toolbar=no,location=no,status=no'
     );
+    
     if (mainWindow) {
       setMainWindowRef(mainWindow);
       setTimeout(() => {
         if (!isMainWindowReady) {
-          sendToMainWindow({ type: 'CHANGE_SLIDE', slideIndex: currentSlideIndex, timestamp: Date.now() });
+          sendToMainWindow({ 
+            type: 'CHANGE_SLIDE', 
+            slideIndex: startIndex, 
+            timestamp: Date.now() 
+          });
         }
       }, 2000);
     } else {
@@ -762,6 +887,56 @@ export default function PresenterControlWorship() {
             </div>
           </div>
 
+          {/* 🔥 NEW: Slide Notes */}
+          {currentSlide.notes && (
+            <div className="bg-yellow-900/40 border border-yellow-700/50 rounded-xl p-3 shadow-xl flex-shrink-0">
+              <div className="flex items-start gap-2">
+                <div className="text-yellow-400 text-sm">📝</div>
+                <div className="flex-1">
+                  <div className="text-xs font-semibold text-yellow-300 mb-1">Notes:</div>
+                  <div className="text-sm text-gray-300 leading-relaxed">{currentSlide.notes}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🔥 NEW: Quick Search */}
+          <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 rounded-xl p-3 shadow-xl border border-purple-700/50 flex-shrink-0">
+            <h3 className="text-xs font-bold mb-2 text-purple-300 uppercase flex items-center gap-1.5">
+              <Search size={12} />
+              Quick Jump
+            </h3>
+            <input
+              type="text"
+              placeholder="Search song title..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg text-sm border border-gray-700 focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+
+          {/* 🔥 NEW: Slide History */}
+          {slideHistory.length > 1 && (
+            <div className="bg-gradient-to-br from-orange-900/40 to-red-900/40 rounded-xl p-3 shadow-xl border border-orange-700/50 flex-shrink-0">
+              <h3 className="text-xs font-bold mb-2 text-orange-300 uppercase flex items-center gap-1.5">
+                <History size={12} />
+                Recent Slides
+              </h3>
+              <div className="flex gap-1.5 flex-wrap">
+                {slideHistory.slice(1, 5).map(idx => (
+                  <button
+                    key={idx}
+                    onClick={() => changeSlide(idx)}
+                    className="bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs font-semibold transition"
+                    title={allSlides[idx]?.itemTitle}
+                  >
+                    #{idx + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Navigation - Fixed Height */}
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-3 shadow-xl border border-gray-700 flex-shrink-0">
             <h3 className="text-xs font-bold mb-2 text-gray-300 uppercase flex items-center gap-1.5">
@@ -784,6 +959,14 @@ export default function PresenterControlWorship() {
               <button onClick={() => changeSlide(allSlides.length - 1)} className="bg-gray-800 hover:bg-gray-700 py-2 rounded-lg transition flex flex-col items-center justify-center gap-0.5 text-xs">
                 <Square size={14} />
                 <span>Last</span>
+              </button>
+              {/* 🔥 NEW: Black Screen Button */}
+              <button 
+                onClick={toggleBlackScreen}
+                className={`${isBlackScreen ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-gray-800 hover:bg-gray-700'} py-2 rounded-lg transition flex flex-col items-center justify-center gap-0.5 text-xs col-span-4`}
+              >
+                <span className="text-lg">{isBlackScreen ? '🔆' : '⚫'}</span>
+                <span>{isBlackScreen ? 'Show' : 'Black'}</span>
               </button>
             </div>
           </div>
@@ -965,6 +1148,20 @@ export default function PresenterControlWorship() {
                           All changes apply immediately to the live presentation
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🔥 NEW: Keyboard Shortcuts Info */}
+                <div className="pt-3 border-t border-gray-700">
+                  <div className="bg-purple-900/30 border border-purple-700/50 rounded-lg p-3">
+                    <div className="font-semibold text-xs mb-2 text-purple-300">⌨️ Keyboard Shortcuts</div>
+                    <div className="text-xs text-gray-400 space-y-1">
+                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">B</kbd> - Toggle Black Screen</div>
+                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">→</kbd> - Next Slide</div>
+                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">←</kbd> - Previous Slide</div>
+                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">Home</kbd> - First Slide</div>
+                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">End</kbd> - Last Slide</div>
                     </div>
                   </div>
                 </div>

@@ -221,6 +221,14 @@ export default function RemoteControl() {
             <Square size={28} className="hidden md:block" />
             <p className="text-xs mt-1">Last</p>
           </button>
+          <button
+            onClick={() => handleCommand('BLACK_SCREEN')}
+            disabled={!connected}
+            className="bg-gray-900 hover:bg-black active:bg-gray-800 disabled:opacity-30 p-2 sm:p-3 md:p-5 rounded-lg md:rounded-xl transition active:scale-95 flex flex-col items-center justify-center col-span-2"
+          >
+            <span className="text-2xl">⚫</span>
+            <p className="text-xs mt-1">Hide Screen</p>
+          </button>
         </div>
 
         {/* Main Controls - BIGGER TOUCH TARGETS */}

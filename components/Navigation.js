@@ -34,6 +34,7 @@ export default function Navigation() {
                     width={32} 
                     height={32}
                     className="object-contain"
+                    style={{ width: 'auto', height: '32px' }}
                   />
                 </div>
               </div>
@@ -65,7 +66,11 @@ export default function Navigation() {
             
             {/* How to Use - Special */}
             <Link href="/how-to-use">
-              <div className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 transition shadow-md ml-2">
+              <div className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition shadow-md ml-2 ${
+                router.pathname === '/how-to-use'
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
+                  : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
+              }`}>
                 <HelpCircle size={18} />
                 <span className="hidden xl:inline">Guide</span>
               </div>
@@ -111,7 +116,11 @@ export default function Navigation() {
               <Link href="/how-to-use">
                 <div 
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg font-semibold bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg font-semibold shadow-md ${
+                    router.pathname === '/how-to-use'
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
+                      : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
+                  }`}
                 >
                   <HelpCircle size={18} />
                   <span>How to Use Guide</span>

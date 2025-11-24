@@ -3,6 +3,17 @@ import Link from 'next/link';
 import { Search, Music, BookOpen, Download, Calendar, FileText, Zap, Users, Shield, Star, Play, ArrowRight, Check, Sparkles, Heart, TrendingUp } from 'lucide-react';
 import Head from 'next/head';
 
+const ClientOnly = ({ children }) => {
+  const [hasMounted, setHasMounted] = useState(false);
+  
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+  
+  if (!hasMounted) return null;
+  return <>{children}</>;
+};
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -54,7 +65,7 @@ export default function Home() {
           </div>
 
           {/* Floating Particles */}
-          <div className="absolute inset-0">
+          <ClientOnly>
             {[...Array(20)].map((_, i) => (
               <div
                 key={i}
@@ -65,9 +76,9 @@ export default function Home() {
                   animationDelay: `${Math.random() * 5}s`,
                   animationDuration: `${3 + Math.random() * 4}s`
                 }}
-              ></div>
+              />
             ))}
-          </div>
+          </ClientOnly>
 
           <div className="container mx-auto px-4 py-20 relative z-10">
             <div className="text-center max-w-6xl mx-auto">
