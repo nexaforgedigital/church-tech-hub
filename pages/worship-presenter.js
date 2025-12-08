@@ -18,6 +18,8 @@ export default function WorshipPresenter() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(true);
+  const [isBlackScreen, setIsBlackScreen] = useState(false);
+  const [isClearScreen, setIsClearScreen] = useState(false);
   const [presentSettings, setPresentSettings] = useState({
     background: 'gradient-blue',
     fontFamily: 'Arial',
@@ -29,9 +31,6 @@ export default function WorshipPresenter() {
   const [isReady, setIsReady] = useState(false);
   const slideChangeTimeoutRef = useRef(null);
   
-  // 🔥 NEW: Black screen state
-  const [isBlackScreen, setIsBlackScreen] = useState(false);
-
   const backgrounds = {
     'gradient-blue': '#1e3a8a',
     'gradient-purple': '#6b21a8',
@@ -255,22 +254,25 @@ export default function WorshipPresenter() {
   }, [allSlides, isReady]);
 
   // Listen for messages
+  // Listen for messages
   useEffect(() => {
     const handleMessage = (event) => {
       console.log('📨 Main received:', event.data.type);
-      
+    
       if (event.data.type === 'CHANGE_SLIDE') {
         const newIndex = event.data.slideIndex;
         console.log('🎯 Main: Changing to slide:', newIndex);
-        
+      
         if (slideChangeTimeoutRef.current) {
           clearTimeout(slideChangeTimeoutRef.current);
         }
-        
+      
         setCurrentSlideIndex(newIndex);
         setShowGrid(false);
         setShowItemList(false);
-        
+        setIsBlackScreen(false);  // Clear black screen on slide change
+        setIsClearScreen(false);  // Clear clear screen on slide change
+      
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({
             type: 'SLIDE_CHANGED',
@@ -281,7 +283,7 @@ export default function WorshipPresenter() {
       } else if (event.data.type === 'UPDATE_SETTINGS') {
         console.log('⚙️ Main: Updating settings:', event.data.settings);
         setPresentSettings(event.data.settings);
-        
+      
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({
             type: 'SETTINGS_UPDATED',
@@ -290,12 +292,16 @@ export default function WorshipPresenter() {
           }, '*');
         }
       } else if (event.data.type === 'TOGGLE_BLACK_SCREEN') {
-        // 🔥 NEW: Handle black screen toggle
-        console.log('⚫ Main: Toggling black screen to:', event.data.value);
+        console.log('⚫ Toggling black screen:', event.data.value);
         setIsBlackScreen(event.data.value);
+        setIsClearScreen(false);
+      } else if (event.data.type === 'TOGGLE_CLEAR_SCREEN') {
+        console.log('🔲 Toggling clear screen:', event.data.value);
+        setIsClearScreen(event.data.value);
+        setIsBlackScreen(false);
       }
     };
-    
+  
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
@@ -478,7 +484,7 @@ export default function WorshipPresenter() {
         {/* 🔥 NEW: Black Screen Overlay */}
         {isBlackScreen ? (
           <div className="absolute inset-0 bg-black z-50 flex items-center justify-center">
-            <div className="text-gray-800 text-6xl">⚫</div>
+            <div className="text-gray-800 text-6xl"></div>
           </div>
         ) : (
           <>
@@ -500,63 +506,83 @@ export default function WorshipPresenter() {
               </div>
             )}
 
-            {/* Main Content - VERTICALLY CENTERED */}
-            <div className="flex-1 flex items-center justify-center p-6 relative z-10">
-              <div className="w-full max-w-7xl animate-fade-in" key={currentSlideIndex}>
-                {currentSlide.type === 'song-title' && (
-                  <div className="text-center flex items-center justify-center min-h-[60vh]">
-                    <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold drop-shadow-2xl leading-tight" style={{ fontFamily: currentFont }}>
-                    </h1>
-                  </div>
-                )}
+        {/* Main Content - PERFECTLY CENTERED */}
+        <div className="flex-1 flex items-center justify-center p-8 relative z-10">
+          {isBlackScreen ? (
+            // BLACK SCREEN
+            <div className="absolute inset-0 bg-black z-50"></div>
+          ) : isClearScreen ? (
+            // CLEAR SCREEN
+            <div className="absolute inset-0 z-50"></div>
+          ) : (
+            // NORMAL SLIDE CONTENT - PERFECTLY CENTERED
+            <div className="w-full h-full flex items-center justify-center animate-fade-in" key={currentSlideIndex}>
+              {currentSlide.type === 'song-title' && (
+                <div className="w-full max-w-6xl px-12">
+                  <h1 
+                    className="text-6xl md:text-7xl lg:text-8xl font-bold text-center text-white drop-shadow-2xl leading-tight"
+                    style={{ fontFamily: currentFont }}
+                  >
+                    {currentSlide.content}
+                  </h1>
+                </div>
+              )}
 
-                {currentSlide.type === 'song-lyrics' && (
-                  <div className="text-center flex items-center justify-center min-h-[60vh] max-w-6xl mx-auto">
-                    <pre 
-                      className="leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl text-3xl md:text-4xl lg:text-5xl" 
-                      style={{ 
-                        fontSize: `${currentFontSize}pt`, 
-                        fontFamily: currentFont 
-                      }}
+              {currentSlide.type === 'song-lyrics' && (
+                <div className="w-full max-w-7xl px-12 flex items-center justify-center">
+                  <pre 
+                    className="text-center font-sans text-white whitespace-pre-wrap drop-shadow-2xl leading-relaxed"
+                    style={{ 
+                      fontSize: `${currentFontSize * 1.2}pt`,
+                      fontFamily: currentFont,
+                      lineHeight: '1.6'
+                    }}
+                  >
+                    {currentSlide.content}
+                  </pre>
+                </div>
+              )}
+
+              {currentSlide.type === 'verse' && (
+                <div className="w-full max-w-6xl px-12">
+                  <div className="text-center">
+                    <div 
+                      className="text-4xl md:text-5xl lg:text-6xl font-bold mb-10 text-yellow-300 drop-shadow-xl"
+                      style={{ fontFamily: currentFont }}
+                    >
+                      {currentSlide.reference}
+                    </div>
+                    <div 
+                      className="text-4xl md:text-5xl leading-relaxed drop-shadow-2xl text-white"
+                      style={{ fontFamily: currentFont }}
                     >
                       {currentSlide.content}
-                    </pre>
-                  </div>
-                )}
-
-                {currentSlide.type === 'verse' && (
-                  <div className="text-center flex items-center justify-center min-h-[60vh]">
-                    <div className="max-w-5xl mx-auto px-6">
-                      <div className="text-3xl md:text-4xl lg:text-5xl font-bold mb-8 text-yellow-300 drop-shadow-xl" style={{ fontFamily: currentFont }}>
-                        {currentSlide.reference}
-                      </div>
-                      <div className="text-3xl md:text-4xl lg:text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: currentFont }}>
-                        {currentSlide.reference}
-                      </div>
-                      <div className="text-5xl leading-relaxed drop-shadow-2xl" style={{ fontFamily: currentFont }}>
-                        {currentSlide.content}
-                      </div>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {currentSlide.type === 'announcement' && (
-                  <div className="text-center flex items-center justify-center min-h-[60vh]">
-                    <div className="max-w-6xl mx-auto px-6">
-                      <div className="text-4xl md:text-6xl lg:text-7xl font-bold mb-8 drop-shadow-2xl" style={{ fontFamily: currentFont }}>
-                        {currentSlide.title}
-                      </div>
-                      <div className="text-3xl md:text-4xl lg:text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: currentFont }}>
-                        {currentSlide.title}
-                      </div>
-                      <div className="text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap" style={{ fontFamily: currentFont }}>
-                        {currentSlide.content}
-                      </div>
+              {currentSlide.type === 'announcement' && (
+                <div className="w-full max-w-6xl px-12">
+                  <div className="text-center">
+                    <div 
+                      className="text-5xl md:text-6xl lg:text-7xl font-bold mb-12 drop-shadow-2xl text-white"
+                      style={{ fontFamily: currentFont }}
+                    >
+                      {currentSlide.title}
+                    </div>
+                    <div 
+                      className="text-4xl md:text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap text-white"
+                      style={{ fontFamily: currentFont }}
+                    >
+                      {currentSlide.content}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
+          )}
+        </div>
 
             {/* Slide Grid View */}
             {showGrid && (
@@ -759,11 +785,23 @@ export default function WorshipPresenter() {
 
         <style jsx>{`
           @keyframes fade-in {
-            from { opacity: 0; transform: translateY(30px); }
+            from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
           }
           .animate-fade-in {
             animation: fade-in 0.4s ease-out;
+          }
+        
+          /* Perfect line spacing for lyrics */
+          pre {
+            line-height: 1.8 !important;
+            letter-spacing: 0.02em;
+          }
+        
+          /* Prevent text overflow */
+          pre, h1, div {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
           }
         `}</style>
       </div>

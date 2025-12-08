@@ -195,39 +195,49 @@ export default function RemoteControl() {
 
       {/* Controls - MOBILE OPTIMIZED */}
       <div className="p-3 sm:p-4 md:p-6 bg-black/30 backdrop-blur-md flex-shrink-0">
-        {/* Quick Actions - SMALLER ON MOBILE */}
-        <div className="grid grid-cols-3 gap-2 md:gap-3 mb-2 sm:mb-3 md:mb-4">
+        {/* Quick Actions - 2x2 Grid */}
+        <div className="grid grid-cols-2 gap-2 md:gap-3 mb-2 sm:mb-3 md:mb-4">
           <button
             onClick={goToFirst}
             disabled={!connected || currentSlide === 0}
-            className={`bg-white/20 hover:bg-white/30 active:bg-white/40 disabled:opacity-30 p-2 sm:p-3 md:p-5 rounded-lg md:rounded-xl transition active:scale-95 flex flex-col items-center justify-center ${
+            className={`bg-white/20 hover:bg-white/30 active:bg-white/40 disabled:opacity-30 p-3 sm:p-4 md:p-5 rounded-lg md:rounded-xl transition active:scale-95 flex flex-col items-center justify-center ${
               lastCommand === 'FIRST_SLIDE' ? 'ring-2 ring-white/50' : ''
             }`}
           >
-            <Home size={16} className="sm:hidden" />
-            <Home size={20} className="hidden sm:block md:hidden" />
-            <Home size={28} className="hidden md:block" />
+            <Home size={24} />
             <p className="text-xs mt-1">First</p>
           </button>
           <button
             onClick={goToLast}
             disabled={!connected || currentSlide >= totalSlides - 1}
-            className={`bg-white/20 hover:bg-white/30 active:bg-white/40 disabled:opacity-30 p-2 sm:p-3 md:p-5 rounded-lg md:rounded-xl transition active:scale-95 flex flex-col items-center justify-center ${
+            className={`bg-white/20 hover:bg-white/30 active:bg-white/40 disabled:opacity-30 p-3 sm:p-4 md:p-5 rounded-lg md:rounded-xl transition active:scale-95 flex flex-col items-center justify-center ${
               lastCommand === 'LAST_SLIDE' ? 'ring-2 ring-white/50' : ''
             }`}
           >
-            <Square size={16} className="sm:hidden" />
-            <Square size={20} className="hidden sm:block md:hidden" />
-            <Square size={28} className="hidden md:block" />
+            <Square size={24} />
             <p className="text-xs mt-1">Last</p>
           </button>
           <button
             onClick={() => handleCommand('BLACK_SCREEN')}
             disabled={!connected}
-            className="bg-gray-900 hover:bg-black active:bg-gray-800 disabled:opacity-30 p-2 sm:p-3 md:p-5 rounded-lg md:rounded-xl transition active:scale-95 flex flex-col items-center justify-center col-span-2"
+            className={`bg-white/20 hover:bg-white/30 active:bg-white/40 disabled:opacity-30 p-3 sm:p-4 md:p-5 rounded-lg md:rounded-xl transition active:scale-95 flex flex-col items-center justify-center ${
+              lastCommand === 'BLACK_SCREEN' ? 'ring-2 ring-white/50' : ''
+            }`}
           >
-            <span className="text-2xl">⚫</span>
-            <p className="text-xs mt-1">Hide Screen</p>
+            <div className="w-8 h-8 bg-black border-2 border-white rounded"></div>
+            <p className="text-xs mt-1">Black</p>
+          </button>
+          <button
+            onClick={() => handleCommand('CLEAR_SCREEN')}
+            disabled={!connected}
+            className={`bg-white/20 hover:bg-white/30 active:bg-white/40 disabled:opacity-30 p-3 sm:p-4 md:p-5 rounded-lg md:rounded-xl transition active:scale-95 flex flex-col items-center justify-center ${
+              lastCommand === 'CLEAR_SCREEN' ? 'ring-2 ring-white/50' : ''
+            }`}
+          >
+            <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+            </svg>
+            <p className="text-xs mt-1">Clear</p>
           </button>
         </div>
 

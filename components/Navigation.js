@@ -38,8 +38,8 @@ export default function Navigation() {
                   />
                 </div>
               </div>
-              <div className="hidden sm:block">
-                <div className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <div>
+                <div className="text-base sm:text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   ChurchAssist
                 </div>
               </div>

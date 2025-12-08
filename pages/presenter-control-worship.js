@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Grid, Monitor, X, Clock, List, Settings, Home, Maximize2, Square, Eye, GripVertical, Zap, Activity, Smartphone, Search, History } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw, X, Clock, Settings, Home, Square, Smartphone, Maximize2, Eye, Activity, RefreshCw, Search, Zap, History } from 'lucide-react';
 import QRCodeGenerator from '../components/QRCodeGenerator';
-import BackgroundUploader from '../components/BackgroundUploader';
 import { createSession, updateSession, listenToSession, clearCommand } from '../lib/firebase';
 import { songStorage } from '../utils/songStorage';
 
@@ -22,29 +21,33 @@ export default function PresenterControlWorship() {
     displayMode: 'tamil-transliteration'
   });
   const [mainWindowRef, setMainWindowRef] = useState(null);
-  const [activeTab, setActiveTab] = useState('slides');
   const [isMainWindowReady, setIsMainWindowReady] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [showSettings, setShowSettings] = useState(false);
   const messageQueueRef = useRef([]);
   const slideListRef = useRef(null);
   
-  // Resizable panel states
-  const [leftPanelWidth, setLeftPanelWidth] = useState(60);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // 🔥 FIREBASE: Remote control states
+  // Display states
+  const [isBlackScreen, setIsBlackScreen] = useState(false);
+  const [isClearScreen, setIsClearScreen] = useState(false);
+  
+  // Firebase states
   const [sessionId, setSessionId] = useState('');
   const [showQRCode, setShowQRCode] = useState(false);
   const [remoteConnected, setRemoteConnected] = useState(false);
+  const [processedCommands, setProcessedCommands] = useState(new Set());
+
+  // Auto-refresh state
   const [refreshing, setRefreshing] = useState(false);
   
-  // 🔥 NEW: Track processed commands to prevent duplicates
-  const [processedCommands, setProcessedCommands] = useState(new Set());
+  // Preview state
+  const [previewSlideIndex, setPreviewSlideIndex] = useState(null);
+  const [previewSettings, setPreviewSettings] = useState(null); // For settings preview
   
-  // 🔥 NEW FEATURES
-  const [isBlackScreen, setIsBlackScreen] = useState(false);
-  const [slideHistory, setSlideHistory] = useState([]);
+  // 🔥 NEW: World-class features
   const [searchQuery, setSearchQuery] = useState('');
+  const [slideHistory, setSlideHistory] = useState([]);
+  const [showHotkeys, setShowHotkeys] = useState(false);
 
   const backgrounds = {
     'gradient-blue': { color: '#1e3a8a', name: 'Deep Blue' },
@@ -78,13 +81,13 @@ export default function PresenterControlWorship() {
     }
   }, [service, settings]);
 
-  // 🔥 FIREBASE: Generate session ID and create session
+  // Generate session ID
   useEffect(() => {
     const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setSessionId(newSessionId);
   }, []);
 
-  // 🔥 FIREBASE: Create session when slides are ready
+  // Create Firebase session
   useEffect(() => {
     if (sessionId && allSlides.length > 0) {
       createSession(sessionId, {
@@ -95,69 +98,48 @@ export default function PresenterControlWorship() {
     }
   }, [sessionId, allSlides.length]);
 
-  // 🔥 FIREBASE: Listen for remote commands - FIXED WITH DEDUPLICATION
+  // Listen for remote commands
   useEffect(() => {
     if (!sessionId) return;
 
-    console.log('👂 Setting up Firebase listener for session:', sessionId);
-
     const unsubscribe = listenToSession(sessionId, (data) => {
-      console.log('📩 Firebase data received:', data);
-    
+      if (data.currentSlide !== undefined && data.currentSlide !== currentSlideIndex) {
+        setCurrentSlideIndex(data.currentSlide);
+      }
+      
       if (data.command) {
         const { action, timestamp } = data.command;
         const commandId = `${action}-${timestamp}`;
       
-        console.log('🎮 Command detected:', action, 'Timestamp:', timestamp, 'ID:', commandId);
+        if (processedCommands.has(commandId)) return;
       
-        // 🔥 Check if already processed
-        if (processedCommands.has(commandId)) {
-          console.log('⏭️ Command already processed, skipping');
-          return;
-        }
-      
-        // Only process recent commands (within 5 seconds)
         const age = Date.now() - timestamp;
         if (age < 5000) {
-          console.log('✅ Processing command (age:', age, 'ms)');
-          
-          // 🔥 Mark as processed BEFORE executing
           setProcessedCommands(prev => {
             const newSet = new Set(prev);
             newSet.add(commandId);
             return newSet;
           });
           
-          // Execute command
           handleRemoteCommand(action);
           
-          // 🔥 Clear command from Firebase after execution
           setTimeout(() => {
-            clearCommand(sessionId).catch(err => {
-              console.error('Failed to clear command:', err);
-            });
+            clearCommand(sessionId).catch(err => console.error('Failed to clear command:', err));
           }, 500);
-        } else {
-          console.log('⏰ Command too old, ignoring (age:', age, 'ms)');
         }
       }
     
-      // Update remote connection status
       if (data.remoteConnected) {
         setRemoteConnected(true);
-        console.log('📱 Remote connected');
       }
     });
 
     return () => {
-      if (unsubscribe) {
-        console.log('🔌 Unsubscribing from Firebase');
-        unsubscribe();
-      }
+      if (unsubscribe) unsubscribe();
     };
-  }, [sessionId, processedCommands]);
+  }, [sessionId, processedCommands, currentSlideIndex]);
 
-  // 🔥 FIREBASE: Sync slide changes to Firebase
+  // Sync slide changes to Firebase
   useEffect(() => {
     if (sessionId && allSlides.length > 0) {
       updateSession(sessionId, {
@@ -168,92 +150,41 @@ export default function PresenterControlWorship() {
     }
   }, [currentSlideIndex, allSlides.length, sessionId]);
 
-  // 🔥 FIREBASE: Handle remote commands
+  // Handle remote commands
   const handleRemoteCommand = (action) => {
-    console.log('🎮 Remote command received:', action);
-  
     switch(action) {
       case 'NEXT_SLIDE':
-        console.log('➡️ Next slide command');
         if (currentSlideIndex < allSlides.length - 1) {
           changeSlide(currentSlideIndex + 1);
         }
         break;
-      
       case 'PREV_SLIDE':
-        console.log('⬅️ Previous slide command');
         if (currentSlideIndex > 0) {
           changeSlide(currentSlideIndex - 1);
         }
         break;
-      
       case 'FIRST_SLIDE':
-        console.log('⏮️ First slide command');
         changeSlide(0);
         break;
-      
       case 'LAST_SLIDE':
-        console.log('⏭️ Last slide command');
         changeSlide(allSlides.length - 1);
         break;
-      
       case 'BLACK_SCREEN':
-        console.log('⚫ Black screen command');
         toggleBlackScreen();
         break;
-      
-      default:
-        console.warn('❓ Unknown command:', action);
+      case 'CLEAR_SCREEN':
+        toggleClearScreen();
+        break;
     }
   };
 
-  const refreshService = async () => {
-    setRefreshing(true);
-  
-    try {
-      // Reload service items from localStorage or re-fetch
-      const savedService = localStorage.getItem('worship-autosave');
-      if (savedService) {
-        const data = JSON.parse(savedService);
-        setServiceItems(data.items || []);
-      
-        // Regenerate slides
-        await generateAllSlides(data.items || []);
-      
-        console.log('✅ Service refreshed!');
-      }
-    } catch (error) {
-      console.error('Error refreshing service:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // Auto-refresh every 10 seconds to check for new songs
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const savedService = localStorage.getItem('worship-autosave');
-      if (savedService) {
-        const data = JSON.parse(savedService);
-        const newItemsCount = data.items?.length || 0;
-        const currentItemsCount = serviceItems.length;
-      
-        if (newItemsCount !== currentItemsCount) {
-          console.log('🔄 New items detected, refreshing...');
-          refreshService();
-        }
-      }
-    }, 10000); // Check every 10 seconds
-  
-    return () => clearInterval(interval);
-  }, [serviceItems.length]);
-
-  // 🔥 FIXED: Generate slides with custom song support
-  const generateAllSlides = useCallback(async (items) => {
+  // Generate ALL slides individually
+  const generateAllSlides = useCallback(async (items, customSettings = null) => {
     const slides = [];
-    const displayMode = presentSettings.displayMode || 'tamil-transliteration';
-    
-    console.log('📊 Generating slides with mode:', displayMode);
+    const settings = customSettings || previewSettings || presentSettings;
+    const displayMode = settings.displayMode || 'tamil-transliteration';
+  
+    console.log('📊 Generating slides with display mode:', displayMode);
     
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
       const item = items[itemIndex];
@@ -262,51 +193,36 @@ export default function PresenterControlWorship() {
         try {
           let song;
           
-          // 🔥 FIX: Check if it's a custom song FIRST
           if (item.data.id && item.data.id.toString().startsWith('custom-')) {
-            console.log('📦 Loading custom song:', item.data.id);
             const customSongs = songStorage.getCustomSongs();
             song = customSongs.find(s => s.id === item.data.id);
-            
-            if (!song) {
-              console.error('❌ Custom song not found:', item.data.id);
-              continue; // Skip this song
-            }
-            console.log('✅ Custom song loaded:', song.title);
+            if (!song) continue;
           } else {
-            // Regular song from API
-            console.log('🌐 Fetching song from API:', item.data.id);
             const response = await fetch(`/api/songs/${item.data.id}`);
-            if (!response.ok) {
-              console.error('❌ Failed to fetch song:', item.data.id);
-              continue;
-            }
+            if (!response.ok) continue;
             song = await response.json();
           }
           
-          // 🔥 FIX: Validate song has lyrics
-          if (!song.lyrics || !song.lyrics.tamil || !song.lyrics.transliteration) {
-            console.error('❌ Song missing lyrics:', song.title);
-            continue;
-          }
+          if (!song.lyrics || !song.lyrics.tamil || !song.lyrics.transliteration) continue;
           
-          // Add title slide
+          // Title slide
           slides.push({
             type: 'song-title',
             content: song.title,
             itemIndex,
             itemTitle: song.title,
             itemType: 'song',
-            notes: item.notes || ''
+            slideLabel: `${song.title} - Title`
           });
 
-          // Generate lyric slides
+          // Lyric slides
           const maxLines = Math.max(
             song.lyrics.tamil?.length || 0,
             song.lyrics.transliteration?.length || 0,
             song.lyrics.english?.length || 0
           );
 
+          let verseNum = 1;
           for (let i = 0; i < maxLines; i += 2) {
             let content = '';
             
@@ -322,30 +238,6 @@ export default function PresenterControlWorship() {
                 case 'transliteration-only':
                   if (song.lyrics.transliteration[lineIndex]) {
                     content += song.lyrics.transliteration[lineIndex].text + '\n\n';
-                  }
-                  break;
-                case 'english-only':
-                  if (song.lyrics.english && song.lyrics.english[lineIndex]) {
-                    content += song.lyrics.english[lineIndex].text + '\n\n';
-                  }
-                  break;
-                case 'tamil-english':
-                  if (song.lyrics.tamil[lineIndex]) {
-                    content += song.lyrics.tamil[lineIndex].text + '\n';
-                  }
-                  if (song.lyrics.english && song.lyrics.english[lineIndex]) {
-                    content += song.lyrics.english[lineIndex].text + '\n\n';
-                  }
-                  break;
-                case 'all':
-                  if (song.lyrics.tamil[lineIndex]) {
-                    content += song.lyrics.tamil[lineIndex].text + '\n';
-                  }
-                  if (song.lyrics.transliteration[lineIndex]) {
-                    content += song.lyrics.transliteration[lineIndex].text + '\n';
-                  }
-                  if (song.lyrics.english && song.lyrics.english[lineIndex]) {
-                    content += song.lyrics.english[lineIndex].text + '\n\n';
                   }
                   break;
                 case 'tamil-transliteration':
@@ -367,13 +259,14 @@ export default function PresenterControlWorship() {
                 itemIndex,
                 itemTitle: song.title,
                 itemType: 'song',
-                notes: item.notes || '',
+                slideLabel: `${song.title} - Verse ${verseNum}`,
                 displayMode: displayMode
               });
+              verseNum++;
             }
           }
         } catch (error) {
-          console.error('❌ Error processing song:', error);
+          console.error('Error processing song:', error);
         }
       } else if (item.type === 'verse') {
         slides.push({
@@ -383,7 +276,7 @@ export default function PresenterControlWorship() {
           itemIndex,
           itemTitle: item.data.reference,
           itemType: 'verse',
-          notes: item.notes || ''
+          slideLabel: item.data.reference
         });
       } else if (item.type === 'announcement') {
         slides.push({
@@ -393,24 +286,60 @@ export default function PresenterControlWorship() {
           itemIndex,
           itemTitle: item.data.title,
           itemType: 'announcement',
-          notes: item.notes || ''
+          slideLabel: item.data.title
         });
       }
     }
     
-    console.log('✅ Generated', slides.length, 'slides');
     setAllSlides(slides);
   }, [presentSettings.displayMode]);
 
-  // Regenerate when display mode changes
-  useEffect(() => {
-    if (serviceItems.length > 0 && allSlides.length > 0) {
-      const firstLyricsSlide = allSlides.find(s => s.type === 'song-lyrics');
-      if (firstLyricsSlide && firstLyricsSlide.displayMode !== presentSettings.displayMode) {
-        setTimeout(() => generateAllSlides(serviceItems), 200);
+  // Auto-refresh function
+  const checkForUpdates = useCallback(async () => {
+    if (refreshing) return;
+    
+    setRefreshing(true);
+    try {
+      const savedService = localStorage.getItem('worship-autosave');
+      if (!savedService) {
+        setRefreshing(false);
+        return;
       }
+
+      const data = JSON.parse(savedService);
+      const newItems = data.items || [];
+      
+      const hasChanged = 
+        newItems.length !== serviceItems.length ||
+        JSON.stringify(newItems) !== JSON.stringify(serviceItems);
+      
+      if (hasChanged) {
+        const savedIndex = currentSlideIndex;
+        setServiceItems(newItems);
+        await generateAllSlides(newItems);
+        
+        setTimeout(() => {
+          if (savedIndex < allSlides.length) {
+            setCurrentSlideIndex(savedIndex);
+          }
+        }, 500);
+      }
+    } catch (error) {
+      console.error('❌ Auto-refresh error:', error);
+    } finally {
+      setRefreshing(false);
     }
-  }, [presentSettings.displayMode, serviceItems, allSlides, generateAllSlides]);
+  }, [serviceItems, currentSlideIndex, allSlides.length, generateAllSlides, refreshing]);
+
+  // Auto-refresh every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!refreshing) {
+        checkForUpdates();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [checkForUpdates, refreshing]);
 
   // Timer
   useEffect(() => {
@@ -427,14 +356,8 @@ export default function PresenterControlWorship() {
       if (event.data.type === 'MAIN_READY') {
         setIsMainWindowReady(true);
         setConnectionStatus('connected');
-        if (messageQueueRef.current.length > 0) {
-          messageQueueRef.current.forEach(msg => sendToMainWindow(msg));
-          messageQueueRef.current = [];
-        }
       } else if (event.data.type === 'SLIDE_CHANGED') {
         setCurrentSlideIndex(event.data.slideIndex);
-      } else if (event.data.type === 'SETTINGS_UPDATED') {
-        setPresentSettings(event.data.settings);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -456,38 +379,19 @@ export default function PresenterControlWorship() {
 
   // Auto-scroll to current slide
   useEffect(() => {
-    if (slideListRef.current && activeTab === 'slides') {
+    if (slideListRef.current) {
       const currentElement = slideListRef.current.querySelector(`[data-slide-index="${currentSlideIndex}"]`);
       if (currentElement) {
-        currentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        currentElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }
-  }, [currentSlideIndex, activeTab]);
-
-  // 🔥 NEW: Track slide history
-  useEffect(() => {
-    setSlideHistory(prev => {
-      const newHistory = [currentSlideIndex, ...prev.filter(i => i !== currentSlideIndex)];
-      return newHistory.slice(0, 5); // Keep last 5
-    });
   }, [currentSlideIndex]);
 
-  // 🔥 NEW: Quick search
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const found = allSlides.findIndex(s => 
-        s.itemTitle.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      if (found !== -1 && found !== currentSlideIndex) {
-        changeSlide(found);
-      }
-    }
-  }, [searchQuery]);
-
-  // Keyboard controls
+  // 🔥 Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
         changeSlide(currentSlideIndex + 1);
@@ -500,45 +404,30 @@ export default function PresenterControlWorship() {
       } else if (e.key === 'End') {
         e.preventDefault();
         changeSlide(allSlides.length - 1);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        changeSlide(currentSlideIndex - 1);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        changeSlide(currentSlideIndex + 1);
       } else if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         toggleBlackScreen();
+      } else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        toggleClearScreen();
+      } else if (e.key === '?' && e.shiftKey) {
+        e.preventDefault();
+        setShowHotkeys(!showHotkeys);
       }
     };
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentSlideIndex, allSlides]);
+  }, [currentSlideIndex, allSlides, isBlackScreen, isClearScreen, showHotkeys]);
 
-  // Drag resize
+  // Track slide history
   useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (isDragging) {
-        const container = document.getElementById('main-container');
-        if (container) {
-          const rect = container.getBoundingClientRect();
-          const newWidth = ((e.clientX - rect.left) / rect.width) * 100;
-          if (newWidth > 40 && newWidth < 70) {
-            setLeftPanelWidth(newWidth);
-          }
-        }
-      }
-    };
-    const handleMouseUp = () => setIsDragging(false);
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+    if (currentSlideIndex !== null && !slideHistory.includes(currentSlideIndex)) {
+      setSlideHistory(prev => {
+        const newHistory = [currentSlideIndex, ...prev];
+        return newHistory.slice(0, 10); // Keep last 10
+      });
     }
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
+  }, [currentSlideIndex]);
 
   const sendToMainWindow = (message) => {
     if (mainWindowRef && !mainWindowRef.closed) {
@@ -564,81 +453,156 @@ export default function PresenterControlWorship() {
     }
   };
 
-  const updateSettings = (newSettings) => {
+  const updateSettings = async (newSettings) => {
     const displayModeChanged = newSettings.displayMode !== presentSettings.displayMode;
+  
     setPresentSettings(newSettings);
+  
     const message = { type: 'UPDATE_SETTINGS', settings: newSettings, timestamp: Date.now() };
     if (isMainWindowReady) {
       sendToMainWindow(message);
     }
+  
+    // Regenerate if display mode changed
     if (displayModeChanged && serviceItems.length > 0) {
-      setTimeout(() => generateAllSlides(serviceItems), 300);
+      console.log('🔄 Display mode changed, regenerating slides...');
+      setTimeout(() => generateAllSlides(serviceItems, newSettings), 300);
     }
   };
 
-  const goToItem = (itemIndex) => {
-    const slideIndex = allSlides.findIndex(slide => slide.itemIndex === itemIndex);
-    if (slideIndex !== -1) {
-      changeSlide(slideIndex);
+  // 🔥 NEW: Preview settings without applying
+  // 🔥 IMPROVED: Preview settings without applying + regenerate if display mode changed
+  // 🔥 FIXED: Preview settings with FORCED re-render
+  const previewSettingsChange = async (newSettings) => {
+    console.log('🎨 Preview settings changing:', newSettings);
+    setPreviewSettings(newSettings);
+  
+    // If display mode changed, MUST regenerate slides
+    if (newSettings.displayMode !== presentSettings.displayMode) {
+      console.log('🔄 Display mode changed to:', newSettings.displayMode);
+    
+      // Update presentSettings temporarily to regenerate with new mode
+      setPresentSettings(newSettings);
+    
+      // Force regenerate all slides
+      await generateAllSlides(serviceItems);
+    
+      // Force preview panel to update by resetting and setting index
+      const currentIdx = currentSlideIndex;
+      setPreviewSlideIndex(null);
+    
+      setTimeout(() => {
+        setPreviewSlideIndex(currentIdx);
+        setPreviewSettings(newSettings); // Keep preview active
+      }, 100);
+    
+      console.log('✅ Slides regenerated with new display mode');
+    } else {
+      // Just color/font changes - force preview update
+      setPreviewSlideIndex(null);
+      setTimeout(() => {
+        setPreviewSlideIndex(currentSlideIndex);
+      }, 50);
     }
   };
 
-  // 🔥 NEW: Black screen toggle
+  // 🔥 NEW: Apply previewed settings
+  // 🔥 IMPROVED: Apply previewed settings and regenerate if needed
+  // 🔥 FIXED: Apply previewed settings with proper regeneration
+  const applyPreviewSettings = async () => {
+    if (previewSettings) {
+      const displayModeChanged = previewSettings.displayMode !== presentSettings.displayMode;
+    
+      console.log('✅ Applying settings to main screen:', previewSettings);
+    
+      // Update settings first
+      setPresentSettings(previewSettings);
+    
+      // Send to main window
+      const message = { type: 'UPDATE_SETTINGS', settings: previewSettings, timestamp: Date.now() };
+      if (isMainWindowReady) {
+        sendToMainWindow(message);
+      }
+    
+      // Regenerate slides if display mode changed
+      if (displayModeChanged) {
+        console.log('🔄 Display mode changed, regenerating local slides...');
+        await generateAllSlides(serviceItems, previewSettings);
+      }
+    
+      // Clear preview state
+      setPreviewSettings(null);
+      setPreviewSlideIndex(currentSlideIndex);
+    }
+  };
+
   const toggleBlackScreen = () => {
-    const newValue = !isBlackScreen;
-    setIsBlackScreen(newValue);
+    const newState = !isBlackScreen;
+    setIsBlackScreen(newState);
+    setIsClearScreen(false);
+    
     if (mainWindowRef && !mainWindowRef.closed) {
       mainWindowRef.postMessage({
         type: 'TOGGLE_BLACK_SCREEN',
-        value: newValue,
+        value: newState,
         timestamp: Date.now()
       }, '*');
-      console.log('⚫ Black screen:', newValue ? 'ON' : 'OFF');
     }
   };
 
-  // 🔥 FIXED: Start from current slide
-  const openMainPresentation = () => {
+  const toggleClearScreen = () => {
+    const newState = !isClearScreen;
+    setIsClearScreen(newState);
+    setIsBlackScreen(false);
+    
+    if (mainWindowRef && !mainWindowRef.closed) {
+      mainWindowRef.postMessage({
+        type: 'TOGGLE_CLEAR_SCREEN',
+        value: newState,
+        timestamp: Date.now()
+      }, '*');
+    }
+  };
+
+  const openMainPresentation = (fromStart = true) => {
     if (serviceItems.length === 0) {
       alert('No service items to present!');
       return;
     }
-    
-    // 🔥 NEW: Ask user where to start
-    const startFromCurrent = window.confirm(
-      `Start presentation from current slide (${currentSlideIndex + 1}/${allSlides.length})?\n\n` +
-      `Click OK to start from current slide\n` +
-      `Click Cancel to start from beginning`
-    );
-    
-    const startIndex = startFromCurrent ? currentSlideIndex : 0;
-    console.log('🎬 Starting presentation from slide:', startIndex + 1);
-    
+  
+    // Determine starting index
+    const startIndex = fromStart ? 0 : currentSlideIndex;
+  
     setConnectionStatus('connecting');
     const params = new URLSearchParams({
       service: service,
       settings: JSON.stringify(presentSettings),
       controlMode: 'true',
-      startIndex: startIndex.toString() // 🔥 Pass start index
+      startIndex: startIndex.toString()
     });
-    
+  
+    console.log(`🎬 Opening presentation from slide ${startIndex + 1}`);
+  
     const mainWindow = window.open(
       `/worship-presenter?${params.toString()}`,
       'mainPresentation',
       'fullscreen=yes,scrollbars=no,menubar=no,toolbar=no,location=no,status=no'
     );
-    
+  
     if (mainWindow) {
       setMainWindowRef(mainWindow);
-      setTimeout(() => {
-        if (!isMainWindowReady) {
-          sendToMainWindow({ 
-            type: 'CHANGE_SLIDE', 
-            slideIndex: startIndex, 
-            timestamp: Date.now() 
-          });
-        }
-      }, 2000);
+      // Set current index if starting from current
+      if (!fromStart) {
+        setTimeout(() => {
+          if (isMainWindowReady) {
+            sendToMainWindow({ 
+              type: 'CHANGE_SLIDE', 
+              slideIndex: startIndex, 
+              timestamp: Date.now() 
+            });
+          }
+        }, 1000);
+      }
     } else {
       setConnectionStatus('disconnected');
       alert('Failed to open presentation window. Please allow pop-ups.');
@@ -667,12 +631,8 @@ export default function PresenterControlWorship() {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-950 text-white">
         <div className="text-center">
-          <div className="relative">
-            <div className="animate-spin rounded-full h-20 w-20 border-b-4 border-blue-500 mx-auto mb-6"></div>
-            <Zap size={32} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-blue-500 animate-pulse" />
-          </div>
-          <div className="text-2xl font-bold mb-2">Loading Presenter Control...</div>
-          <div className="text-gray-400">Preparing your worship service</div>
+          <div className="animate-spin rounded-full h-20 w-20 border-b-4 border-blue-500 mx-auto mb-6"></div>
+          <div className="text-2xl font-bold">Loading Presenter Control...</div>
         </div>
       </div>
     );
@@ -680,41 +640,62 @@ export default function PresenterControlWorship() {
 
   const currentSlide = allSlides[currentSlideIndex];
   const nextSlide = currentSlideIndex < allSlides.length - 1 ? allSlides[currentSlideIndex + 1] : null;
-  const currentBgColor = backgrounds[presentSettings.background].color;
+  
+  // Use preview settings if available, otherwise use current settings
+  const activeSettings = previewSettings || presentSettings;
+  const currentBgColor = backgrounds[activeSettings.background].color;
 
-  const groupedItems = serviceItems.map((item, index) => ({
-    ...item,
-    slides: allSlides.filter(slide => slide.itemIndex === index),
-    isActive: currentSlide.itemIndex === index
-  }));
+  // Filter slides based on search
+  const filteredSlides = searchQuery
+    ? allSlides.filter(slide => 
+        slide.slideLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        slide.content?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : allSlides;
 
-  const renderSlidePreview = (slide, size = 'large') => {
-    const fontSize = size === 'large' ? 'text-2xl' : 'text-lg';
-    const titleSize = size === 'large' ? 'text-3xl' : 'text-xl';
+  // 🔥 IMPROVED: Render slide with black/clear screen support
+  const renderSlidePreview = (slide, size = 'large', showBlackClear = false) => {
+    const fontSize = size === 'large' ? 'text-xl' : size === 'medium' ? 'text-base' : 'text-sm';
+    const titleSize = size === 'large' ? 'text-2xl' : size === 'medium' ? 'text-xl' : 'text-base';
+    
+    // Show black or clear screen if active and showBlackClear is true
+    if (showBlackClear && isBlackScreen) {
+      return (
+        <div className="h-full w-full flex items-center justify-center bg-black">
+          <div className="text-gray-700 text-4xl">⚫</div>
+        </div>
+      );
+    }
+    
+    if (showBlackClear && isClearScreen) {
+      return (
+        <div className="h-full w-full" style={{ backgroundColor: currentBgColor }}>
+        </div>
+      );
+    }
     
     return (
-      <div className="h-full w-full flex items-center justify-center p-4 transition-all duration-300" style={{ backgroundColor: currentBgColor }}>
+      <div className="h-full w-full flex items-center justify-center p-4" style={{ backgroundColor: currentBgColor }}>
         {slide.type === 'song-title' && (
-          <h1 className={`${titleSize} font-bold text-center text-white drop-shadow-2xl line-clamp-3`} style={{ fontFamily: presentSettings.fontFamily }}>
+          <h1 className={`${titleSize} font-bold text-center text-white drop-shadow-2xl line-clamp-3`} style={{ fontFamily: activeSettings.fontFamily }}>
             {slide.content}
           </h1>
         )}
         {slide.type === 'song-lyrics' && (
-          <pre className={`${fontSize} text-center font-sans text-white whitespace-pre-wrap leading-relaxed drop-shadow-2xl line-clamp-5`} 
-               style={{ fontFamily: presentSettings.fontFamily }}>
+          <pre className={`${fontSize} text-center font-sans text-white whitespace-pre-wrap leading-relaxed drop-shadow-2xl line-clamp-6`} style={{ fontFamily: activeSettings.fontFamily }}>
             {slide.content}
           </pre>
         )}
         {slide.type === 'verse' && (
           <div className="text-center text-white">
-            <div className={`${size === 'large' ? 'text-xl' : 'text-base'} font-bold mb-3 text-yellow-300 drop-shadow-lg`}>{slide.reference}</div>
-            <div className={`${fontSize} leading-relaxed drop-shadow-2xl line-clamp-4`}>{slide.content}</div>
+            <div className="text-lg font-bold mb-2 text-yellow-300" style={{ fontFamily: activeSettings.fontFamily }}>{slide.reference}</div>
+            <div className={`${fontSize} line-clamp-4`} style={{ fontFamily: activeSettings.fontFamily }}>{slide.content}</div>
           </div>
         )}
         {slide.type === 'announcement' && (
-          <div className="text-center max-w-3xl text-white">
-            <div className={`${titleSize} font-bold mb-3 drop-shadow-2xl line-clamp-2`}>{slide.title}</div>
-            <div className={`${fontSize} leading-relaxed drop-shadow-2xl whitespace-pre-wrap line-clamp-3`}>{slide.content}</div>
+          <div className="text-center text-white">
+            <div className={`${titleSize} font-bold mb-2 line-clamp-2`} style={{ fontFamily: activeSettings.fontFamily }}>{slide.title}</div>
+            <div className={`${fontSize} line-clamp-3`} style={{ fontFamily: activeSettings.fontFamily }}>{slide.content}</div>
           </div>
         )}
       </div>
@@ -723,142 +704,147 @@ export default function PresenterControlWorship() {
 
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
-      {/* Top Bar - Compact */}
-      <div className="bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 border-b border-gray-800 shadow-2xl flex-shrink-0">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-lg">
-              <Monitor size={20} />
-            </div>
-            <div>
-              <h1 className="text-base font-bold">Presenter Control</h1>
-              <p className="text-xs text-gray-400">Dual-Screen Mode</p>
-            </div>
-          </div>
-          
+      {/* FIXED TOP BAR */}
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="bg-black/50 backdrop-blur-xl rounded-lg px-3 py-1.5 border border-gray-700">
-              <div className="flex items-center gap-2">
-                <Clock size={16} className="text-blue-400" />
-                <span className="font-mono text-xl font-bold">{formatTime(elapsedTime)}</span>
-                <button onClick={() => setIsTimerRunning(!isTimerRunning)} className="p-1 hover:bg-white/10 rounded transition">
-                  {isTimerRunning ? <Pause size={14} /> : <Play size={14} />}
-                </button>
-                <button onClick={() => setElapsedTime(0)} className="p-1 hover:bg-white/10 rounded transition">
-                  <RotateCcw size={14} />
-                </button>
-                <button
-                  onClick={refreshService}
-                  disabled={refreshing}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition disabled:opacity-50"
-                  title="Refresh Service"
-                >
-                  <svg 
-                    className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  {refreshing ? 'Refreshing...' : 'Refresh'}
-                </button>
-              </div>
-            </div>
-
-            <div className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 ${
-              connectionStatus === 'connected' ? 'bg-green-500/20 text-green-400' :
-              connectionStatus === 'connecting' ? 'bg-yellow-500/20 text-yellow-400' :
-              'bg-gray-500/20 text-gray-400'
-            }`}>
-              <Activity size={12} className={connectionStatus === 'connected' ? 'animate-pulse' : ''} />
-              {connectionStatus === 'connected' ? 'Live' : connectionStatus === 'connecting' ? 'Connecting' : 'Offline'}
-            </div>
-
-            {/* 🔥 FIREBASE: Remote Control Button */}
-            <button
-              onClick={() => setShowQRCode(!showQRCode)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-semibold transition text-xs ${
-                remoteConnected ? 'bg-green-500 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'
-              }`}
-              title="Mobile Remote Control"
-            >
-              <Smartphone size={16} />
-              {remoteConnected ? 'Remote' : 'Remote'}
-            </button>
-
-            {!mainWindowRef || mainWindowRef.closed ? (
-              <button onClick={openMainPresentation} className="bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition text-xs">
-                <Maximize2 size={14} />
-                Open Main
-              </button>
-            ) : (
-              <button onClick={() => mainWindowRef.focus()} className="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition text-xs">
-                <Eye size={14} />
-                Focus
-              </button>
-            )}
-
-            <button onClick={closePresentation} className="bg-red-600 hover:bg-red-700 p-1.5 rounded-lg transition">
-              <X size={16} />
-            </button>
+            <Zap size={20} className="text-blue-400" />
+            <div className="text-lg font-bold text-blue-400">ChurchAssist Pro</div>
           </div>
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
+            connectionStatus === 'connected' ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'
+          }`}>
+            <Activity size={12} className={connectionStatus === 'connected' ? 'animate-pulse' : ''} />
+            {connectionStatus === 'connected' ? 'LIVE' : 'Offline'}
+          </div>
+          {refreshing && (
+            <div className="flex items-center gap-2 text-xs text-blue-400">
+              <RefreshCw size={12} className="animate-spin" />
+              Updating...
+            </div>
+          )}
         </div>
 
-        {/* Tabs - Integrated */}
-        <div className="flex gap-0 px-4 bg-gray-950">
-          <button onClick={() => setActiveTab('slides')} className={`px-4 py-2 font-semibold transition flex items-center gap-2 text-xs border-b-2 ${activeTab === 'slides' ? 'border-blue-500 text-white bg-gray-900/50' : 'border-transparent text-gray-400 hover:text-white'}`}>
-            <Grid size={14} />
-            Slides
-            <span className="bg-blue-600 px-1.5 py-0.5 rounded text-xs">{allSlides.length}</span>
+        <div className="flex items-center gap-2">
+          <div className="bg-gray-800 px-4 py-1.5 rounded-lg flex items-center gap-2">
+            <Clock size={16} />
+            <span className="font-mono text-lg font-bold">{formatTime(elapsedTime)}</span>
+            <button onClick={() => setIsTimerRunning(!isTimerRunning)} className="p-1 hover:bg-gray-700 rounded">
+              {isTimerRunning ? <Pause size={14} /> : <Play size={14} />}
+            </button>
+            <button onClick={() => setElapsedTime(0)} className="p-1 hover:bg-gray-700 rounded">
+              <RotateCcw size={14} />
+            </button>
+          </div>
+
+          <button
+            onClick={checkForUpdates}
+            disabled={refreshing}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2 ${
+              refreshing ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+            title="Refresh service (Auto-refresh: 5s)"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           </button>
-          <button onClick={() => setActiveTab('service')} className={`px-4 py-2 font-semibold transition flex items-center gap-2 text-xs border-b-2 ${activeTab === 'service' ? 'border-purple-500 text-white bg-gray-900/50' : 'border-transparent text-gray-400 hover:text-white'}`}>
-            <List size={14} />
-            Service
-            <span className="bg-purple-600 px-1.5 py-0.5 rounded text-xs">{serviceItems.length}</span>
+
+          <button
+            onClick={() => setShowHotkeys(!showHotkeys)}
+            className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-gray-700 hover:bg-gray-600"
+            title="Keyboard Shortcuts (Shift+?)"
+          >
+            ⌨️
           </button>
-          <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 font-semibold transition flex items-center gap-2 text-xs border-b-2 ${activeTab === 'settings' ? 'border-orange-500 text-white bg-gray-900/50' : 'border-transparent text-gray-400 hover:text-white'}`}>
-            <Settings size={14} />
-            Settings
+
+          <button
+            onClick={() => setShowQRCode(!showQRCode)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${
+              remoteConnected ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+            title="Mobile Remote"
+          >
+            <Smartphone size={16} />
+          </button>
+
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-gray-700 hover:bg-gray-600"
+            title="Settings"
+          >
+            <Settings size={16} />
+          </button>
+
+          {!mainWindowRef || mainWindowRef.closed ? (
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => openMainPresentation(true)} 
+                className="bg-green-600 hover:bg-green-700 px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2"
+                title="Start from first slide"
+              >
+                <Maximize2 size={16} />
+                From Start
+              </button>
+              <button 
+                onClick={() => openMainPresentation(false)} 
+                className="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2"
+                title="Start from current slide"
+              >
+                <Play size={16} />
+                From Current
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => mainWindowRef.focus()} className="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2">
+              <Eye size={16} />
+              Focus
+            </button>
+          )}
+
+          <button onClick={closePresentation} className="bg-red-600 hover:bg-red-700 p-1.5 rounded-lg">
+            <X size={16} />
           </button>
         </div>
       </div>
 
-      {/* Main Content - Fixed Height, No Scroll */}
-      <div id="main-container" className="flex-1 flex gap-0 bg-gray-950 overflow-hidden">
-        {/* Left Panel - Fixed, No Scroll */}
-        <div className="flex flex-col gap-3 p-3 bg-gray-950" style={{ width: `${leftPanelWidth}%` }}>
-          {/* Previews - Fixed Height */}
-          <div className="flex gap-3" style={{ height: '40vh' }}>
-            <div className="flex-1 bg-gray-900 rounded-xl overflow-hidden shadow-2xl border-2 border-red-500 relative">
-              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent px-3 py-2 z-10">
+      {/* MAIN LAYOUT - PROFESSIONAL 3-COLUMN */}
+      <div className="flex-1 flex gap-0 overflow-hidden">
+        {/* LEFT: Current/Next Preview (35%) */}
+        <div className="w-[35%] bg-gray-900 flex flex-col">
+          {/* Current Slide - SHOWS BLACK/CLEAR */}
+          <div className="h-[50%] p-4">
+            <div className="h-full bg-black rounded-xl overflow-hidden border-4 border-red-500 relative shadow-2xl">
+              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent p-3 z-10">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <span className="text-xs uppercase text-gray-400 font-semibold">Current</span>
-                    <div className="text-xs font-bold truncate">{currentSlide.itemTitle}</div>
+                    <div className="text-xs text-gray-400 uppercase font-bold">CURRENT OUTPUT</div>
+                    <div className="text-sm font-bold truncate">
+                      {isBlackScreen ? '⚫ Black Screen' : isClearScreen ? '🔲 Clear Screen' : currentSlide.slideLabel}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 bg-red-600 px-2 py-0.5 rounded-full animate-pulse ml-2">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                  <div className="bg-red-600 px-3 py-1 rounded-full animate-pulse">
                     <span className="text-xs font-bold">LIVE</span>
                   </div>
                 </div>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-3 py-1.5 z-10">
-                <div className="text-center text-sm font-bold">{currentSlideIndex + 1} / {allSlides.length}</div>
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-3 z-10">
+                <div className="text-center text-2xl font-bold">{currentSlideIndex + 1} / {allSlides.length}</div>
               </div>
-              {renderSlidePreview(currentSlide, 'large')}
+              {renderSlidePreview(currentSlide, 'large', true)}
             </div>
+          </div>
 
-            <div className="flex-1 bg-gray-900 rounded-xl overflow-hidden shadow-xl border-2 border-blue-500/30 relative">
-              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent px-3 py-2 z-10">
-                <span className="text-xs uppercase text-gray-400 font-semibold">Next</span>
+          {/* Next Slide */}
+          <div className="h-[30%] p-4 pt-0">
+            <div className="h-full bg-gray-800 rounded-xl overflow-hidden border-2 border-blue-500/30 relative">
+              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent p-2 z-10">
+                <div className="text-xs text-gray-400 uppercase font-bold">NEXT</div>
               </div>
-              <div className="h-full opacity-70">
-                {nextSlide ? renderSlidePreview(nextSlide, 'large') : (
-                  <div className="h-full flex items-center justify-center" style={{ backgroundColor: currentBgColor }}>
-                    <div className="text-center">
-                      <Square size={32} className="mx-auto mb-2 text-gray-500" />
-                      <div className="text-lg text-gray-400 font-semibold">End</div>
+              <div className="h-full opacity-60">
+                {nextSlide ? renderSlidePreview(nextSlide, 'medium', false) : (
+                  <div className="h-full flex items-center justify-center">
+                    <div className="text-gray-500 text-center">
+                      <Square size={32} className="mx-auto mb-2" />
+                      <div className="text-sm font-bold">End of Service</div>
                     </div>
                   </div>
                 )}
@@ -866,353 +852,469 @@ export default function PresenterControlWorship() {
             </div>
           </div>
 
-          {/* Info Card - Fixed Height */}
-          <div className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-xl p-3 shadow-xl border border-blue-800/50 flex-shrink-0">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <h3 className="text-xs uppercase text-blue-300 mb-0.5 font-semibold">Current Item</h3>
-                <div className="text-base font-bold line-clamp-1">{currentSlide.itemTitle}</div>
-                <div className="text-xs text-gray-400 capitalize">{currentSlide.itemType} • {currentSlide.itemIndex + 1}/{serviceItems.length}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-blue-400">{Math.round(((currentSlideIndex + 1) / allSlides.length) * 100)}%</div>
-                <div className="text-xs text-gray-400">Done</div>
-              </div>
+          {/* Controls */}
+          <div className="p-4 pt-0 space-y-2">
+            <div className="grid grid-cols-4 gap-2">
+              <button onClick={() => changeSlide(0)} disabled={currentSlideIndex === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-30 py-2 rounded-lg flex flex-col items-center justify-center gap-1">
+                <Home size={18} />
+                <span className="text-xs">First</span>
+              </button>
+              <button onClick={() => changeSlide(currentSlideIndex - 1)} disabled={currentSlideIndex === 0} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-30 py-2 rounded-lg flex flex-col items-center justify-center gap-1">
+                <ChevronLeft size={18} />
+                <span className="text-xs">Prev</span>
+              </button>
+              <button onClick={() => changeSlide(currentSlideIndex + 1)} disabled={currentSlideIndex >= allSlides.length - 1} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-30 py-2 rounded-lg flex flex-col items-center justify-center gap-1">
+                <ChevronRight size={18} />
+                <span className="text-xs">Next</span>
+              </button>
+              <button onClick={() => changeSlide(allSlides.length - 1)} disabled={currentSlideIndex >= allSlides.length - 1} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-30 py-2 rounded-lg flex flex-col items-center justify-center gap-1">
+                <Square size={18} />
+                <span className="text-xs">Last</span>
+              </button>
             </div>
-            <div className="mt-2 h-1.5 bg-black/30 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-500"
-                style={{ width: `${((currentSlideIndex + 1) / allSlides.length) * 100}%` }}
-              ></div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={toggleBlackScreen} className={`py-2 rounded-lg flex items-center justify-center gap-2 transition ${isBlackScreen ? 'bg-yellow-500 text-black' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                <div className="w-4 h-4 bg-black border-2 border-current rounded"></div>
+                <span className="text-xs font-semibold">{isBlackScreen ? 'Show' : 'Black (B)'}</span>
+              </button>
+              <button onClick={toggleClearScreen} className={`py-2 rounded-lg flex items-center justify-center gap-2 transition ${isClearScreen ? 'bg-yellow-500 text-black' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                </svg>
+                <span className="text-xs font-semibold">{isClearScreen ? 'Show' : 'Clear (C)'}</span>
+              </button>
             </div>
           </div>
+        </div>
 
-          {/* 🔥 NEW: Slide Notes */}
-          {currentSlide.notes && (
-            <div className="bg-yellow-900/40 border border-yellow-700/50 rounded-xl p-3 shadow-xl flex-shrink-0">
-              <div className="flex items-start gap-2">
-                <div className="text-yellow-400 text-sm">📝</div>
-                <div className="flex-1">
-                  <div className="text-xs font-semibold text-yellow-300 mb-1">Notes:</div>
-                  <div className="text-sm text-gray-300 leading-relaxed">{currentSlide.notes}</div>
-                </div>
-              </div>
+        {/* CENTER: All Slides with Search (40%) */}
+        <div className="w-[40%] bg-gray-950 flex flex-col border-x border-gray-800">
+          <div className="p-4 border-b border-gray-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-300 uppercase">All Slides</h3>
+              <div className="text-xs text-gray-500">{allSlides.length} slides</div>
             </div>
-          )}
-
-          {/* 🔥 NEW: Quick Search */}
-          <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 rounded-xl p-3 shadow-xl border border-purple-700/50 flex-shrink-0">
-            <h3 className="text-xs font-bold mb-2 text-purple-300 uppercase flex items-center gap-1.5">
-              <Search size={12} />
-              Quick Jump
-            </h3>
-            <input
-              type="text"
-              placeholder="Search song title..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg text-sm border border-gray-700 focus:border-purple-500 focus:outline-none"
-            />
-          </div>
-
-          {/* 🔥 NEW: Slide History */}
-          {slideHistory.length > 1 && (
-            <div className="bg-gradient-to-br from-orange-900/40 to-red-900/40 rounded-xl p-3 shadow-xl border border-orange-700/50 flex-shrink-0">
-              <h3 className="text-xs font-bold mb-2 text-orange-300 uppercase flex items-center gap-1.5">
-                <History size={12} />
-                Recent Slides
-              </h3>
-              <div className="flex gap-1.5 flex-wrap">
-                {slideHistory.slice(1, 5).map(idx => (
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search slides..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            {slideHistory.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                <History size={14} className="text-gray-500 flex-shrink-0" />
+                {slideHistory.slice(0, 5).map(idx => (
                   <button
                     key={idx}
                     onClick={() => changeSlide(idx)}
-                    className="bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs font-semibold transition"
-                    title={allSlides[idx]?.itemTitle}
+                    className="bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded text-xs flex-shrink-0"
                   >
                     #{idx + 1}
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Navigation - Fixed Height */}
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-3 shadow-xl border border-gray-700 flex-shrink-0">
-            <h3 className="text-xs font-bold mb-2 text-gray-300 uppercase flex items-center gap-1.5">
-              <ChevronRight size={12} />
-              Quick Nav
-            </h3>
-            <div className="grid grid-cols-4 gap-1.5">
-              <button onClick={() => changeSlide(0)} className="bg-gray-800 hover:bg-gray-700 py-2 rounded-lg transition flex flex-col items-center justify-center gap-0.5 text-xs">
-                <Home size={14} />
-                <span>First</span>
-              </button>
-              <button onClick={() => changeSlide(currentSlideIndex - 1)} disabled={currentSlideIndex === 0} className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:opacity-50 py-2 rounded-lg transition flex flex-col items-center justify-center gap-0.5 text-xs">
-                <ChevronLeft size={14} />
-                <span>Prev</span>
-              </button>
-              <button onClick={() => changeSlide(currentSlideIndex + 1)} disabled={currentSlideIndex === allSlides.length - 1} className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:opacity-50 py-2 rounded-lg transition flex flex-col items-center justify-center gap-0.5 text-xs">
-                <ChevronRight size={14} />
-                <span>Next</span>
-              </button>
-              <button onClick={() => changeSlide(allSlides.length - 1)} className="bg-gray-800 hover:bg-gray-700 py-2 rounded-lg transition flex flex-col items-center justify-center gap-0.5 text-xs">
-                <Square size={14} />
-                <span>Last</span>
-              </button>
-              {/* 🔥 NEW: Black Screen Button */}
-              <button 
-                onClick={toggleBlackScreen}
-                className={`${isBlackScreen ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-gray-800 hover:bg-gray-700'} py-2 rounded-lg transition flex flex-col items-center justify-center gap-0.5 text-xs col-span-4`}
-              >
-                <span className="text-lg">{isBlackScreen ? '🔆' : '⚫'}</span>
-                <span>{isBlackScreen ? 'Show' : 'Black'}</span>
-              </button>
-            </div>
+            )}
           </div>
-        </div>
-
-        {/* Resize Handle */}
-        <div 
-          className={`w-1 bg-gray-800 hover:bg-blue-500 cursor-col-resize flex items-center justify-center group transition-all flex-shrink-0 ${isDragging ? 'bg-blue-500 w-2' : ''}`}
-          onMouseDown={() => setIsDragging(true)}
-        >
-          <GripVertical size={16} className="text-gray-600 group-hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-        </div>
-
-        {/* Right Panel - Full Height, Embedded Look */}
-        <div className="flex-1 bg-gray-900 overflow-hidden flex flex-col">
-          {/* Tab Content - Full Height, Only This Scrolls */}
-          {activeTab === 'slides' && (
-            <div className="flex-1 overflow-y-auto p-3" ref={slideListRef}>
-              <div className="space-y-2">
-                {allSlides.map((slide, index) => (
+          <div ref={slideListRef} className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+            {filteredSlides.map((slide, origIndex) => {
+              const index = allSlides.indexOf(slide);
+              return (
+                <div
+                  key={`slide-${index}`}
+                  data-slide-index={index}
+                  className="group relative"
+                >
                   <button
-                    key={`slide-${index}`}
-                    data-slide-index={index}
                     onClick={() => changeSlide(index)}
-                    className={`w-full text-left p-3 rounded-lg transition border-2 cursor-pointer transform hover:scale-[1.01] ${
+                    onMouseEnter={() => setPreviewSlideIndex(index)}
+                    className={`w-full text-left p-3 rounded-lg transition border-2 ${
                       currentSlideIndex === index 
-                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 border-blue-400 shadow-lg scale-[1.02]' 
+                        ? 'bg-blue-600 border-blue-400 shadow-lg' 
                         : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <div className={`text-lg font-bold w-8 text-center flex-shrink-0 ${
+                    <div className="flex items-center gap-3">
+                      <div className={`text-lg font-bold w-10 text-center flex-shrink-0 ${
                         currentSlideIndex === index ? 'text-white' : 'text-gray-500'
                       }`}>
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold truncate text-sm">{slide.itemTitle}</div>
+                        <div className="font-semibold truncate text-sm">{slide.slideLabel}</div>
                         <div className="text-xs text-gray-400 capitalize">{slide.type.replace('-', ' ')}</div>
                       </div>
                       {currentSlideIndex === index && (
-                        <div className="bg-red-500 px-1.5 py-0.5 rounded-full text-xs font-bold animate-pulse flex-shrink-0">
+                        <div className="bg-red-500 px-2 py-0.5 rounded-full text-xs font-bold animate-pulse">
                           LIVE
                         </div>
                       )}
                     </div>
                   </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'service' && (
-            <div className="flex-1 overflow-y-auto p-3">
-              <div className="space-y-2">
-                {groupedItems.map((item, index) => (
+                  
                   <button
-                    key={`item-${index}`}
-                    onClick={() => goToItem(index)}
-                    className={`w-full text-left p-4 rounded-lg transition border-2 cursor-pointer transform hover:scale-[1.01] ${
-                      item.isActive 
-                        ? 'bg-gradient-to-r from-yellow-600 to-orange-600 border-yellow-400 shadow-lg scale-[1.02]' 
-                        : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
-                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewSlideIndex(index);
+                    }}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded text-xs font-bold opacity-0 group-hover:opacity-100 transition"
+                    title="Preview"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`text-2xl font-bold flex-shrink-0 ${item.isActive ? 'text-white' : 'text-gray-600'}`}>
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold mb-1 line-clamp-2">
-                          {item.type === 'song' ? item.data.title : 
-                           item.type === 'verse' ? item.data.reference : 
-                           item.data.title}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className={`px-2 py-0.5 rounded-full capitalize font-semibold ${
-                            item.isActive ? 'bg-white/30' : 'bg-white/10'
-                          }`}>
-                            {item.type}
-                          </span>
-                          <span className="opacity-75">
-                            {item.slides.length} slide{item.slides.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                        {item.isActive && (
-                          <div className="bg-white text-black px-2 py-0.5 rounded-full text-xs font-bold inline-block mt-1">
-                            ▶ ACTIVE
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    👁️
                   </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'settings' && (
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold mb-2 text-gray-300">Text Display Mode</label>
-                  <select
-                    value={presentSettings.displayMode || 'tamil-transliteration'}
-                    onChange={(e) => updateSettings({...presentSettings, displayMode: e.target.value})}
-                    className="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 transition text-sm"
-                  >
-                    <option value="tamil-transliteration">Tamil + Transliteration</option>
-                    <option value="tamil-only">Tamil Only</option>
-                    <option value="transliteration-only">Transliteration Only</option>
-                    <option value="english-only">English Only</option>
-                    <option value="tamil-english">Tamil + English</option>
-                    <option value="all">All Three Languages</option>
-                  </select>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-2 text-gray-300">Background Color</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {Object.entries(backgrounds).map(([key, value]) => (
-                      <button
-                        key={key}
-                        onClick={() => updateSettings({...presentSettings, background: key})}
-                        className={`p-3 rounded-lg border-2 transition cursor-pointer ${
-                          presentSettings.background === key 
-                            ? 'border-blue-500 ring-2 ring-blue-500/50 scale-105' 
-                            : 'border-gray-700 hover:border-gray-600'
-                        }`}
-                        style={{ backgroundColor: value.color }}
-                      >
-                        <div className="text-white text-xs font-semibold text-center drop-shadow-lg">
-                          {value.name}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-2 text-gray-300">Font Family</label>
-                  <select
-                    value={presentSettings.fontFamily}
-                    onChange={(e) => updateSettings({...presentSettings, fontFamily: e.target.value})}
-                    className="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 transition text-sm"
-                  >
-                    {fontFamilies.map(font => (
-                      <option key={font} value={font}>{font}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-2 text-gray-300">
-                    Font Size: {presentSettings.fontSize}pt
-                  </label>
-                  <input
-                    type="range"
-                    min="24"
-                    max="48"
-                    value={presentSettings.fontSize}
-                    onChange={(e) => updateSettings({...presentSettings, fontSize: parseInt(e.target.value)})}
-                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>Small</span>
-                    <span>Medium</span>
-                    <span>Large</span>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-gray-700">
-                  <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-3">
-                    <div className="flex items-start gap-2">
-                      <Zap size={18} className="text-blue-400 flex-shrink-0" />
-                      <div className="flex-1">
-                        <div className="font-semibold text-xs mb-1">Instant Updates</div>
-                        <div className="text-xs text-gray-400 leading-relaxed">
-                          All changes apply immediately to the live presentation
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 🔥 NEW: Keyboard Shortcuts Info */}
-                <div className="pt-3 border-t border-gray-700">
-                  <div className="bg-purple-900/30 border border-purple-700/50 rounded-lg p-3">
-                    <div className="font-semibold text-xs mb-2 text-purple-300">⌨️ Keyboard Shortcuts</div>
-                    <div className="text-xs text-gray-400 space-y-1">
-                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">B</kbd> - Toggle Black Screen</div>
-                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">→</kbd> - Next Slide</div>
-                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">←</kbd> - Previous Slide</div>
-                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">Home</kbd> - First Slide</div>
-                      <div><kbd className="bg-gray-700 px-2 py-0.5 rounded">End</kbd> - Last Slide</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* 🔥 FIREBASE: QR Code Modal */}
-      {showQRCode && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Mobile Remote Control</h2>
-              <button
-                onClick={() => setShowQRCode(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-600"
-              >
-                <X size={24} />
-              </button>
+        {/* RIGHT: Preview Panel with Settings Preview (25%) */}
+        <div className="w-[25%] bg-gray-900 p-4 flex flex-col gap-4">
+          <div className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-xl p-4 border border-blue-800/50">
+            <div className="text-xs text-blue-300 uppercase font-bold mb-2">Progress</div>
+            <div className="text-4xl font-bold text-blue-400 mb-2">
+              {Math.round(((currentSlideIndex + 1) / allSlides.length) * 100)}%
             </div>
-            
-            <QRCodeGenerator 
-              url={`${typeof window !== 'undefined' ? window.location.origin : ''}/remote-control?sessionId=${sessionId}`}
-              size={250}
-            />
-            
-            <div className="mt-6 space-y-3">
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                <h3 className="font-bold text-blue-900 mb-2">📱 How to Use:</h3>
-                <ol className="text-sm text-blue-800 space-y-1">
-                  <li>1. Open camera app on your phone</li>
-                  <li>2. Scan this QR code</li>
-                  <li>3. Open the link in your browser</li>
-                  <li>4. Swipe to control slides!</li>
-                </ol>
+            <div className="h-2 bg-black/30 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-500 rounded-full"
+                style={{ width: `${((currentSlideIndex + 1) / allSlides.length) * 100}%` }}
+              ></div>
+            </div>
+            <div className="text-xs text-gray-400 mt-2">
+              {currentSlideIndex + 1} of {allSlides.length} slides
+            </div>
+          </div>
+
+          <div className="flex-1 bg-gray-800 rounded-xl overflow-hidden border-2 border-purple-600 flex flex-col">
+            <div className="p-3 bg-gradient-to-r from-purple-900 to-pink-900 border-b border-purple-700 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-purple-300 uppercase font-bold">Preview</div>
+                {previewSettings && (
+                  <div className="bg-orange-500 px-2 py-0.5 rounded-full text-xs font-bold">
+                    Settings Preview
+                  </div>
+                )}
+                {previewSlideIndex !== null && previewSlideIndex !== currentSlideIndex && !previewSettings && (
+                  <div className="bg-purple-500 px-2 py-0.5 rounded-full text-xs font-bold">
+                    NOT LIVE
+                  </div>
+                )}
               </div>
-              
-              {remoteConnected && (
-                <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 text-center">
-                  <p className="text-green-800 font-semibold flex items-center justify-center gap-2">
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                    Remote Connected!
-                  </p>
+              {previewSlideIndex !== null && previewSlideIndex !== currentSlideIndex && !previewSettings && (
+                <button
+                  onClick={() => changeSlide(previewSlideIndex)}
+                  className="bg-green-600 hover:bg-green-700 px-2 py-1 rounded text-xs font-bold"
+                  title="Send to main screen"
+                >
+                  GO LIVE
+                </button>
+              )}
+              {previewSettings && (
+                <button
+                  onClick={applyPreviewSettings}
+                  className="bg-green-600 hover:bg-green-700 px-2 py-1 rounded text-xs font-bold"
+                  title="Apply settings"
+                >
+                  APPLY
+                </button>
+              )}
+            </div>
+            <div className="flex-1 relative">
+              {previewSlideIndex !== null ? (
+                <>
+                  {renderSlidePreview(allSlides[previewSlideIndex], 'small', false)}
+                  <div className="absolute bottom-2 left-2 right-2 bg-black/80 backdrop-blur p-2 rounded">
+                    <div className="text-xs text-center font-bold">
+                      Slide {previewSlideIndex + 1}: {allSlides[previewSlideIndex].slideLabel}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="h-full flex items-center justify-center p-4 text-center">
+                  <div>
+                    <div className="text-4xl mb-3">👁️</div>
+                    <div className="text-sm font-bold text-gray-400 mb-2">Preview Panel</div>
+                    <div className="text-xs text-gray-500">
+                      Hover over slides to preview or adjust settings
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Hotkeys Modal */}
+      {showHotkeys && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+          <div className="bg-gray-900 rounded-2xl p-8 max-w-2xl w-full mx-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">⌨️ Keyboard Shortcuts</h2>
+              <button onClick={() => setShowHotkeys(false)} className="p-2 hover:bg-gray-800 rounded-lg">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Next Slide</span>
+                  <kbd className="bg-gray-800 px-3 py-1 rounded">→ or Space</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Previous Slide</span>
+                  <kbd className="bg-gray-800 px-3 py-1 rounded">←</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">First Slide</span>
+                  <kbd className="bg-gray-800 px-3 py-1 rounded">Home</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Last Slide</span>
+                  <kbd className="bg-gray-800 px-3 py-1 rounded">End</kbd>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Black Screen</span>
+                  <kbd className="bg-gray-800 px-3 py-1 rounded">B</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Clear Screen</span>
+                  <kbd className="bg-gray-800 px-3 py-1 rounded">C</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Show Hotkeys</span>
+                  <kbd className="bg-gray-800 px-3 py-1 rounded">Shift + ?</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* QR Code Modal */}
+      {showQRCode && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">📱 Mobile Remote</h2>
+              <button onClick={() => setShowQRCode(false)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600">
+                <X size={24} />
+              </button>
+            </div>
+            <QRCodeGenerator 
+              url={`${typeof window !== 'undefined' ? window.location.origin : ''}/remote-control?sessionId=${sessionId}`}
+              size={250}
+            />
+            <div className="mt-6 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">Scan with your phone camera to control slides remotely</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Panel - LEFT SIDE, DOESN'T BLOCK PREVIEW */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex">
+          {/* Settings Panel - Left Side */}
+          <div className="w-full max-w-md bg-gray-900 shadow-2xl overflow-y-auto">
+            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 p-6 z-10">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">⚙️ Settings</h2>
+                <button 
+                  onClick={() => {
+                    setShowSettings(false);
+                    setPreviewSettings(null);
+                  }} 
+                  className="p-2 hover:bg-gray-800 rounded-lg"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* Live Preview Indicator */}
+              {previewSettings && (
+                <div className="bg-orange-500/20 border border-orange-500 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Eye size={16} className="text-orange-400" />
+                    <span className="text-sm font-bold text-orange-300">Preview Active</span>
+                  </div>
+                  <p className="text-xs text-orange-200">Check the preview panel on the right →</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Mini Preview Inside Settings */}
+              <div className="bg-gray-800 rounded-xl overflow-hidden border-2 border-purple-600">
+                <div className="bg-purple-900 px-3 py-2 border-b border-purple-700">
+                  <div className="text-xs font-bold text-purple-300">MINI PREVIEW</div>
+                </div>
+                <div className="aspect-video">
+                  {renderSlidePreview(currentSlide, 'small', false)}
+                </div>
+              </div>
+
+              {/* Display Mode */}
+              <div>
+                <label className="block text-sm font-bold mb-2 text-gray-300">Text Display Mode</label>
+                <select
+                  value={(previewSettings || presentSettings).displayMode || 'tamil-transliteration'}
+                  onChange={(e) => {
+                    const newSettings = {...(previewSettings || presentSettings), displayMode: e.target.value};
+                    previewSettingsChange(newSettings);
+                    setPreviewSlideIndex(currentSlideIndex);
+                  }}
+                  className="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white"
+                >
+                  <option value="tamil-transliteration">Tamil + Transliteration</option>
+                  <option value="tamil-only">Tamil Only</option>
+                  <option value="transliteration-only">Transliteration Only</option>
+                </select>
+              </div>
+
+              {/* Background Color */}
+              <div>
+                <label className="block text-sm font-bold mb-2 text-gray-300">Background Color</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(backgrounds).map(([key, value]) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        const newSettings = {...(previewSettings || presentSettings), background: key};
+                        previewSettingsChange(newSettings);
+                        setPreviewSlideIndex(currentSlideIndex);
+                      }}
+                      className={`p-4 rounded-lg border-2 transition ${
+                        (previewSettings || presentSettings).background === key 
+                          ? 'border-blue-500 ring-2 ring-blue-500/50' 
+                          : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                      style={{ backgroundColor: value.color }}
+                    >
+                      <div className="text-white text-xs font-bold text-center">{value.name}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Font Family */}
+              <div>
+                <label className="block text-sm font-bold mb-2 text-gray-300">Font Family</label>
+                <select
+                  value={(previewSettings || presentSettings).fontFamily}
+                  onChange={(e) => {
+                    const newSettings = {...(previewSettings || presentSettings), fontFamily: e.target.value};
+                    previewSettingsChange(newSettings);
+                    setPreviewSlideIndex(currentSlideIndex);
+                  }}
+                  className="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white"
+                >
+                  {fontFamilies.map(font => (
+                    <option key={font} value={font}>{font}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Font Size */}
+              <div>
+                <label className="block text-sm font-bold mb-2 text-gray-300">
+                  Font Size: {(previewSettings || presentSettings).fontSize}pt
+                </label>
+                <input
+                  type="range"
+                  min="24"
+                  max="48"
+                  value={(previewSettings || presentSettings).fontSize}
+                  onChange={(e) => {
+                    const newSettings = {...(previewSettings || presentSettings), fontSize: parseInt(e.target.value)};
+                    previewSettingsChange(newSettings);
+                    setPreviewSlideIndex(currentSlideIndex);
+                  }}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>24pt</span>
+                  <span>36pt</span>
+                  <span>48pt</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="sticky bottom-0 bg-gray-900 pt-4 pb-2 space-y-2 border-t border-gray-800">
+                {previewSettings ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        applyPreviewSettings();
+                        setShowSettings(false);
+                      }}
+                      className="w-full bg-green-600 hover:bg-green-700 px-4 py-3 rounded-lg font-bold flex items-center justify-center gap-2"
+                    >
+                      <Zap size={18} />
+                      Apply to Main Screen
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPreviewSettings(null);
+                        setPreviewSlideIndex(null);
+                      }}
+                      className="w-full bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded-lg font-bold"
+                    >
+                      Cancel Changes
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="w-full bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded-lg font-bold"
+                  >
+                    Close
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Transparent overlay - Click to close */}
+          <div 
+            className="flex-1 cursor-pointer" 
+            onClick={() => {
+              setShowSettings(false);
+              setPreviewSettings(null);
+            }}
+          ></div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #1f2937;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #4b5563;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #6b7280;
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+          animation: spin-slow 3s linear infinite;
+        }
+      `}</style>
     </div>
   );
 }
