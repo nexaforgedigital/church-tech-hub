@@ -1,49 +1,54 @@
 import '../styles/globals.css';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+import { useRouter } from 'next/router';
+import ErrorBoundary from '../components/ErrorBoundary';
 import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
-import { useRouter } from 'next/router';
-import Head from 'next/head';
+
+// Pages that should NOT show Navigation/Footer (fullscreen/admin pages)
+const noLayoutPages = [
+  '/worship-presenter',
+  '/presenter-control-worship',
+  '/presenter-control',
+  '/mobile-remote',
+  '/remote-control',
+  '/present',
+  '/presenter',
+  '/admin/add-song-bulk',
+  '/admin/import-songs',
+  '/admin',
+  '/admin/quick-add',
+  '/admin/batch-add',
+  '/admin/songs',
+  '/admin/settings',
+];
 
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
   
-  // Pages that shouldn't show navigation/footer (fullscreen presentation modes)
-  const hideNavPages = [
-    '/present/',
-    '/worship-presenter',
-    '/presenter-control-worship'
-  ];
-  
-  const shouldHideNav = hideNavPages.some(path => router.pathname.includes(path));
-
-  if (shouldHideNav) {
-    return (
-      <>
-        <Head>
-          <title>ChurchAssist - Presentation Mode</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-        </Head>
-        <Component {...pageProps} />
-      </>
-    );
-  }
+  // Check if current page should hide navigation/footer
+  const hideLayout = noLayoutPages.some(page => 
+    router.pathname === page || router.pathname.startsWith(page + '/')
+  );
 
   return (
-    <>
-      <Head>
-        <title>ChurchAssist - Professional Worship Solutions</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="description" content="Professional worship presentation and lyrics management for churches. Tamil & English songs, service planning, and tech resources." />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-      <div className="flex flex-col min-h-screen">
-        <Navigation />
-        <main className="flex-1">
-          <Component {...pageProps} />
-        </main>
-        <Footer />
-      </div>
-    </>
+    <ErrorBoundary>
+      {/* Show Navigation on all pages except presenter/fullscreen/admin pages */}
+      {!hideLayout && <Navigation />}
+      
+      {/* Main Content */}
+      <main className={hideLayout ? '' : 'min-h-screen'}>
+        <Component {...pageProps} />
+      </main>
+      
+      {/* Show Footer on all pages except presenter/fullscreen/admin pages */}
+      {!hideLayout && <Footer />}
+      
+      {/* Analytics */}
+      <Analytics />
+      <SpeedInsights />
+    </ErrorBoundary>
   );
 }
 

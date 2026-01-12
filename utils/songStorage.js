@@ -55,6 +55,7 @@ export const songStorage = {
   },
 
   // Import songs from JSON
+  // In importSongs function, replace the merge logic:
   importSongs: (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -62,9 +63,24 @@ export const songStorage = {
         try {
           const imported = JSON.parse(e.target.result);
           const existing = songStorage.getCustomSongs();
-          const merged = [...existing, ...imported];
+          
+          // Filter out duplicates by title
+          const existingTitles = new Set(existing.map(s => s.title.toLowerCase()));
+          const newSongs = imported.filter(song => 
+            !existingTitles.has(song.title.toLowerCase())
+          );
+          
+          // Re-assign IDs to prevent conflicts
+          const processedSongs = newSongs.map(song => ({
+            ...song,
+            id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            isCustom: true,
+            importedAt: new Date().toISOString()
+          }));
+          
+          const merged = [...existing, ...processedSongs];
           localStorage.setItem('customSongs', JSON.stringify(merged));
-          resolve(merged);
+          resolve({ total: merged.length, added: processedSongs.length });
         } catch (error) {
           reject(error);
         }

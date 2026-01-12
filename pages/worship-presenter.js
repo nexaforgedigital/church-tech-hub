@@ -7,7 +7,7 @@ import { songStorage } from '../utils/songStorage';
 
 export default function WorshipPresenter() {
   const router = useRouter();
-  const { service, settings, controlMode, startIndex } = router.query; // 🔥 Added startIndex
+  const { service, settings, controlMode, startIndex } = router.query;
   
   const [serviceItems, setServiceItems] = useState([]);
   const [allSlides, setAllSlides] = useState([]);
@@ -24,7 +24,7 @@ export default function WorshipPresenter() {
     background: 'gradient-blue',
     fontFamily: 'Arial',
     fontSize: 32,
-    displayMode: 'tamil-transliteration',
+    displayMode: 'tamil-only',
     backgroundType: 'color',
     backgroundSrc: ''
   });
@@ -40,12 +40,11 @@ export default function WorshipPresenter() {
     'dark-blue': '#1e293b',
   };
 
-  // 🔥 FIXED: Generate slides with custom song support
+  // Generate slides - TAMIL ONLY (MVP)
   const generateAllSlides = useCallback(async (items) => {
     const slides = [];
-    const displayMode = presentSettings.displayMode || 'tamil-transliteration';
     
-    console.log('📊 Main screen generating slides with mode:', displayMode);
+    console.log('📊 Main screen generating slides - Tamil ONLY mode (MVP)');
     
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
       const item = items[itemIndex];
@@ -54,7 +53,7 @@ export default function WorshipPresenter() {
         try {
           let song;
           
-          // 🔥 FIX: Check if it's a custom song
+          // Check if it's a custom song
           if (item.data.id && item.data.id.toString().startsWith('custom-')) {
             const customSongs = songStorage.getCustomSongs();
             song = customSongs.find(s => s.id === item.data.id);
@@ -82,81 +81,32 @@ export default function WorshipPresenter() {
           // Initialize lyrics with empty arrays if undefined
           const lyrics = {
             tamil: song.lyrics.tamil || [],
-            english: song.lyrics.english || [],
             transliteration: song.lyrics.transliteration || []
           };
           
-          // Title slide
+          // Title slide - Show Tamil title
           slides.push({
             type: 'song-title',
             content: song.title,
+            subtitle: song.titleEnglish || '',
             itemIndex,
-            itemTitle: song.title,
+            itemTitle: song.titleEnglish || song.title,
             slideNumber: slides.length + 1
           });
 
-          // Generate lyric slides based on available data
-          const maxLength = Math.max(
-            lyrics.tamil.length,
-            lyrics.english.length,
-            lyrics.transliteration.length
-          );
-
-          for (let i = 0; i < maxLength; i += 2) {
+          // =============================================
+          // 🔥 MVP: TAMIL ONLY - No transliteration
+          // =============================================
+          const tamilLines = lyrics.tamil;
+          const linesPerSlide = 2;
+          
+          for (let i = 0; i < tamilLines.length; i += linesPerSlide) {
             let content = '';
             
-            for (let j = 0; j < 2 && (i + j) < maxLength; j++) {
+            for (let j = 0; j < linesPerSlide && (i + j) < tamilLines.length; j++) {
               const lineIndex = i + j;
-              
-              switch(displayMode) {
-                case 'tamil-only':
-                  if (lyrics.tamil[lineIndex]) {
-                    content += lyrics.tamil[lineIndex].text + '\n\n';
-                  }
-                  break;
-                  
-                case 'transliteration-only':
-                  if (lyrics.transliteration[lineIndex]) {
-                    content += lyrics.transliteration[lineIndex].text + '\n\n';
-                  }
-                  break;
-                  
-                case 'english-only':
-                  if (lyrics.english[lineIndex]) {
-                    content += lyrics.english[lineIndex].text + '\n\n';
-                  }
-                  break;
-                  
-                case 'tamil-english':
-                  if (lyrics.tamil[lineIndex]) {
-                    content += lyrics.tamil[lineIndex].text + '\n';
-                  }
-                  if (lyrics.english[lineIndex]) {
-                    content += lyrics.english[lineIndex].text + '\n\n';
-                  }
-                  break;
-                  
-                case 'all':
-                  if (lyrics.tamil[lineIndex]) {
-                    content += lyrics.tamil[lineIndex].text + '\n';
-                  }
-                  if (lyrics.transliteration[lineIndex]) {
-                    content += lyrics.transliteration[lineIndex].text + '\n';
-                  }
-                  if (lyrics.english[lineIndex]) {
-                    content += lyrics.english[lineIndex].text + '\n\n';
-                  }
-                  break;
-                  
-                case 'tamil-transliteration':
-                default:
-                  if (lyrics.tamil[lineIndex]) {
-                    content += lyrics.tamil[lineIndex].text + '\n';
-                  }
-                  if (lyrics.transliteration[lineIndex]) {
-                    content += lyrics.transliteration[lineIndex].text + '\n\n';
-                  }
-                  break;
+              if (tamilLines[lineIndex]) {
+                content += tamilLines[lineIndex].text + '\n';
               }
             }
             
@@ -165,12 +115,12 @@ export default function WorshipPresenter() {
                 type: 'song-lyrics',
                 content: content.trim(),
                 itemIndex,
-                itemTitle: song.title,
-                slideNumber: slides.length + 1,
-                displayMode: displayMode
+                itemTitle: song.titleEnglish || song.title,
+                slideNumber: slides.length + 1
               });
             }
           }
+          
         } catch (error) {
           console.error('Error processing song:', error);
         }
@@ -195,9 +145,9 @@ export default function WorshipPresenter() {
       }
     }
 
-    console.log('✅ Main screen generated', slides.length, 'slides');
+    console.log('✅ Main screen generated', slides.length, 'slides (Tamil only)');
     setAllSlides(slides);
-  }, [presentSettings.displayMode]);
+  }, []);
 
   // Initialize service data
   useEffect(() => {
@@ -218,9 +168,9 @@ export default function WorshipPresenter() {
         console.error('Error parsing settings:', error);
       }
     }
-  }, [service, settings]);
+  }, [service, settings, generateAllSlides]);
 
-  // 🔥 NEW: Set initial slide from URL parameter
+  // Set initial slide from URL parameter
   useEffect(() => {
     if (startIndex && allSlides.length > 0) {
       const index = parseInt(startIndex);
@@ -230,14 +180,6 @@ export default function WorshipPresenter() {
       }
     }
   }, [startIndex, allSlides.length]);
-
-  // Regenerate slides when display mode changes
-  useEffect(() => {
-    if (serviceItems.length > 0) {
-      console.log('🔄 Main screen: Display mode changed, regenerating...');
-      generateAllSlides(serviceItems);
-    }
-  }, [presentSettings.displayMode, serviceItems, generateAllSlides]);
 
   // Signal ready
   useEffect(() => {
@@ -253,8 +195,7 @@ export default function WorshipPresenter() {
     }
   }, [allSlides, isReady]);
 
-  // Listen for messages
-  // Listen for messages
+  // Listen for messages from presenter control
   useEffect(() => {
     const handleMessage = (event) => {
       console.log('📨 Main received:', event.data.type);
@@ -270,8 +211,8 @@ export default function WorshipPresenter() {
         setCurrentSlideIndex(newIndex);
         setShowGrid(false);
         setShowItemList(false);
-        setIsBlackScreen(false);  // Clear black screen on slide change
-        setIsClearScreen(false);  // Clear clear screen on slide change
+        setIsBlackScreen(false);
+        setIsClearScreen(false);
       
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({
@@ -317,11 +258,10 @@ export default function WorshipPresenter() {
     return () => clearInterval(interval);
   }, [isTimerRunning]);
 
-  // Manual fullscreen button instead of auto
+  // Show controls on load
   useEffect(() => {
-    // Show controls on load so user can click fullscreen button
     setShowControls(true);
-    setTimeout(() => setShowControls(false), 5000); // Hide after 5 seconds
+    setTimeout(() => setShowControls(false), 5000);
   }, []);
 
   // Show controls on mouse move
@@ -372,6 +312,11 @@ export default function WorshipPresenter() {
       } else if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         setIsBlackScreen(prev => !prev);
+        setIsClearScreen(false);
+      } else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setIsClearScreen(prev => !prev);
+        setIsBlackScreen(false);
       }
     };
     window.addEventListener('keydown', handleKeyPress);
@@ -448,6 +393,7 @@ export default function WorshipPresenter() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Loading state
   if (!serviceItems.length || !allSlides.length) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 to-purple-900 text-white">
@@ -465,6 +411,7 @@ export default function WorshipPresenter() {
   const currentFont = presentSettings.fontFamily || 'Arial';
   const currentFontSize = presentSettings.fontSize || 32;
 
+  // Group slides by service item
   const groupedSlides = allSlides.reduce((acc, slide) => {
     const itemIndex = slide.itemIndex;
     if (!acc[itemIndex]) {
@@ -481,14 +428,14 @@ export default function WorshipPresenter() {
     <>
       <LandscapePrompt />
       <div className="landscape-only h-screen flex flex-col text-white relative overflow-hidden">
-        {/* 🔥 NEW: Black Screen Overlay */}
+        {/* Black Screen Overlay */}
         {isBlackScreen ? (
           <div className="absolute inset-0 bg-black z-50 flex items-center justify-center">
-            <div className="text-gray-800 text-6xl"></div>
+            {/* Empty black screen */}
           </div>
         ) : (
           <>
-            {/* Background - Video or Color */}
+            {/* Background - Video, Image, or Color */}
             {presentSettings.backgroundType === 'video' || presentSettings.backgroundType === 'image' ? (
               <VideoBackground 
                 src={presentSettings.backgroundSrc} 
@@ -506,83 +453,76 @@ export default function WorshipPresenter() {
               </div>
             )}
 
-        {/* Main Content - PERFECTLY CENTERED */}
-        <div className="flex-1 flex items-center justify-center p-8 relative z-10">
-          {isBlackScreen ? (
-            // BLACK SCREEN
-            <div className="absolute inset-0 bg-black z-50"></div>
-          ) : isClearScreen ? (
-            // CLEAR SCREEN
-            <div className="absolute inset-0 z-50"></div>
-          ) : (
-            // NORMAL SLIDE CONTENT - PERFECTLY CENTERED
-            <div className="w-full h-full flex items-center justify-center animate-fade-in" key={currentSlideIndex}>
-              {currentSlide.type === 'song-title' && (
-                <div className="w-full max-w-6xl px-12">
-                  <h1 
-                    className="text-6xl md:text-7xl lg:text-8xl font-bold text-center text-white drop-shadow-2xl leading-tight"
-                    style={{ fontFamily: currentFont }}
-                  >
-                    {currentSlide.content}
-                  </h1>
-                </div>
-              )}
+            {/* Main Content Area */}
+            <div className="absolute inset-0 flex flex-col justify-center items-center px-12 z-10">
+              {isClearScreen ? (
+                // Clear screen - show background only
+                <div className="absolute inset-0 z-50"></div>
+              ) : (
+                // Normal slide content
+                <div className="w-full max-w-7xl animate-fade-in" key={currentSlideIndex}>
+                  {currentSlide.type === 'song-title' && (
+                    <div className="text-center">
+                      <h1 
+                        className="text-6xl md:text-7xl lg:text-8xl font-bold text-white drop-shadow-2xl leading-tight"
+                        style={{ fontFamily: currentFont }}
+                      >
+                        {currentSlide.content}
+                      </h1>
+                    </div>
+                  )}
 
-              {currentSlide.type === 'song-lyrics' && (
-                <div className="w-full max-w-7xl px-12 flex items-center justify-center">
-                  <pre 
-                    className="text-center font-sans text-white whitespace-pre-wrap drop-shadow-2xl leading-relaxed"
-                    style={{ 
-                      fontSize: `${currentFontSize * 1.2}pt`,
-                      fontFamily: currentFont,
-                      lineHeight: '1.6'
-                    }}
-                  >
-                    {currentSlide.content}
-                  </pre>
-                </div>
-              )}
+                  {currentSlide.type === 'song-lyrics' && (
+                    <div className="text-center">
+                      <pre 
+                        className="font-sans text-white whitespace-pre-wrap drop-shadow-2xl leading-relaxed"
+                        style={{ 
+                          fontSize: `${currentFontSize * 1.5}pt`,
+                          fontFamily: currentFont,
+                          lineHeight: '1.5'
+                        }}
+                      >
+                        {currentSlide.content}
+                      </pre>
+                    </div>
+                  )}
 
-              {currentSlide.type === 'verse' && (
-                <div className="w-full max-w-6xl px-12">
-                  <div className="text-center">
-                    <div 
-                      className="text-4xl md:text-5xl lg:text-6xl font-bold mb-10 text-yellow-300 drop-shadow-xl"
-                      style={{ fontFamily: currentFont }}
-                    >
-                      {currentSlide.reference}
+                  {currentSlide.type === 'verse' && (
+                    <div className="text-center">
+                      <div 
+                        className="text-4xl md:text-5xl lg:text-6xl font-bold mb-8 text-yellow-300 drop-shadow-xl"
+                        style={{ fontFamily: currentFont }}
+                      >
+                        {currentSlide.reference}
+                      </div>
+                      <div 
+                        className="text-4xl md:text-5xl leading-relaxed drop-shadow-2xl text-white"
+                        style={{ fontFamily: currentFont }}
+                      >
+                        {currentSlide.content}
+                      </div>
                     </div>
-                    <div 
-                      className="text-4xl md:text-5xl leading-relaxed drop-shadow-2xl text-white"
-                      style={{ fontFamily: currentFont }}
-                    >
-                      {currentSlide.content}
-                    </div>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {currentSlide.type === 'announcement' && (
-                <div className="w-full max-w-6xl px-12">
-                  <div className="text-center">
-                    <div 
-                      className="text-5xl md:text-6xl lg:text-7xl font-bold mb-12 drop-shadow-2xl text-white"
-                      style={{ fontFamily: currentFont }}
-                    >
-                      {currentSlide.title}
+                  {currentSlide.type === 'announcement' && (
+                    <div className="text-center">
+                      <div 
+                        className="text-5xl md:text-6xl lg:text-7xl font-bold mb-10 drop-shadow-2xl text-white"
+                        style={{ fontFamily: currentFont }}
+                      >
+                        {currentSlide.title}
+                      </div>
+                      <div 
+                        className="text-4xl md:text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap text-white"
+                        style={{ fontFamily: currentFont }}
+                      >
+                        {currentSlide.content}
+                      </div>
                     </div>
-                    <div 
-                      className="text-4xl md:text-5xl leading-relaxed drop-shadow-2xl whitespace-pre-wrap text-white"
-                      style={{ fontFamily: currentFont }}
-                    >
-                      {currentSlide.content}
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
 
             {/* Slide Grid View */}
             {showGrid && (
@@ -707,36 +647,66 @@ export default function WorshipPresenter() {
               </div>
             )}
 
-            {/* Controls */}
+            {/* Controls Overlay */}
             <div className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-              <button onClick={prevSlide} disabled={currentSlideIndex === 0} className="absolute bottom-8 left-8 bg-white/20 hover:bg-white/40 backdrop-blur-md p-6 rounded-full transition disabled:opacity-20 pointer-events-auto shadow-2xl">
+              {/* Previous Button */}
+              <button 
+                onClick={prevSlide} 
+                disabled={currentSlideIndex === 0} 
+                className="absolute bottom-8 left-8 bg-white/20 hover:bg-white/40 backdrop-blur-md p-6 rounded-full transition disabled:opacity-20 pointer-events-auto shadow-2xl"
+              >
                 <ChevronLeft size={40} />
               </button>
 
+              {/* Center Controls */}
               <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 pointer-events-auto">
-                <button onClick={() => { setShowItemList(!showItemList); setShowGrid(false); }} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
+                <button 
+                  onClick={() => { setShowItemList(!showItemList); setShowGrid(false); }} 
+                  className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl"
+                  title="Service Items (L)"
+                >
                   <List size={28} />
                 </button>
-                <button onClick={() => { setShowGrid(!showGrid); setShowItemList(false); }} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
+                <button 
+                  onClick={() => { setShowGrid(!showGrid); setShowItemList(false); }} 
+                  className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl"
+                  title="All Slides (G)"
+                >
                   <Grid size={28} />
                 </button>
-                <button onClick={toggleFullscreen} className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl">
+                <button 
+                  onClick={toggleFullscreen} 
+                  className="bg-white/20 hover:bg-white/40 backdrop-blur-md p-5 rounded-full transition shadow-2xl"
+                  title="Fullscreen (F)"
+                >
                   {isFullscreen ? <Minimize size={28} /> : <Maximize size={28} />}
                 </button>
               </div>
 
-              <button onClick={nextSlide} disabled={currentSlideIndex === allSlides.length - 1} className="absolute bottom-8 right-8 bg-white/20 hover:bg-white/40 backdrop-blur-md p-6 rounded-full transition disabled:opacity-20 pointer-events-auto shadow-2xl">
+              {/* Next Button */}
+              <button 
+                onClick={nextSlide} 
+                disabled={currentSlideIndex === allSlides.length - 1} 
+                className="absolute bottom-8 right-8 bg-white/20 hover:bg-white/40 backdrop-blur-md p-6 rounded-full transition disabled:opacity-20 pointer-events-auto shadow-2xl"
+              >
                 <ChevronRight size={40} />
               </button>
 
+              {/* Timer & Current Item Info (Top Left) */}
               <div className="absolute top-8 left-8 space-y-3 pointer-events-auto">
                 <div className="bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl flex items-center gap-4 shadow-2xl">
                   <Clock size={28} />
                   <span className="font-mono text-3xl font-bold">{formatTime(elapsedTime)}</span>
-                  <button onClick={() => setIsTimerRunning(!isTimerRunning)} className="ml-2 p-2 hover:bg-white/20 rounded-lg transition">
+                  <button 
+                    onClick={() => setIsTimerRunning(!isTimerRunning)} 
+                    className="ml-2 p-2 hover:bg-white/20 rounded-lg transition"
+                  >
                     {isTimerRunning ? <Pause size={20} /> : <Play size={20} />}
                   </button>
-                  <button onClick={() => setElapsedTime(0)} className="p-2 hover:bg-white/20 rounded-lg transition">
+                  <button 
+                    onClick={() => setElapsedTime(0)} 
+                    className="p-2 hover:bg-white/20 rounded-lg transition"
+                  >
                     <RotateCcw size={20} />
                   </button>
                 </div>
@@ -747,6 +717,7 @@ export default function WorshipPresenter() {
                 </div>
               </div>
 
+              {/* Progress (Top Right) */}
               <div className="absolute top-8 right-8 bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl pointer-events-auto shadow-2xl">
                 <div className="text-sm opacity-75 mb-3">Progress</div>
                 <div className="flex items-center gap-4">
@@ -765,20 +736,27 @@ export default function WorshipPresenter() {
                 </div>
               </div>
 
+              {/* Fullscreen Prompt (Top Center) */}
               {!isFullscreen && (
                 <button 
                   onClick={toggleFullscreen} 
-                  className="absolute top-8 left-1/2 transform -translate-x-1/2 -translate-y-16 bg-blue-600/40 hover:bg-blue-600/60 backdrop-blur-md px-8 py-4 rounded-full transition pointer-events-auto shadow-2xl flex items-center gap-3"
+                  className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-blue-600/40 hover:bg-blue-600/60 backdrop-blur-md px-8 py-4 rounded-full transition pointer-events-auto shadow-2xl flex items-center gap-3"
                 >
                   <Maximize size={24} />
                   <span className="font-semibold text-lg">Enter Fullscreen</span>
                 </button>
               )}
 
-              <button onClick={exitPresentation} className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-red-600/40 hover:bg-red-600/60 backdrop-blur-md px-8 py-4 rounded-full transition pointer-events-auto shadow-2xl flex items-center gap-3">
-                <X size={24} />
-                <span className="font-semibold text-lg">Exit</span>
-              </button>
+              {/* Exit Button (Top Center when fullscreen) */}
+              {isFullscreen && (
+                <button 
+                  onClick={exitPresentation} 
+                  className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-red-600/40 hover:bg-red-600/60 backdrop-blur-md px-8 py-4 rounded-full transition pointer-events-auto shadow-2xl flex items-center gap-3"
+                >
+                  <X size={24} />
+                  <span className="font-semibold text-lg">Exit (ESC)</span>
+                </button>
+              )}
             </div>
           </>
         )}

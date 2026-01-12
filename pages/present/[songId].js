@@ -24,9 +24,9 @@ export default function PresentationMode() {
     'dark-blue': '#1e293b',
   };
 
-  // FIXED: Only fetch when songId is available
+  // Fetch song when songId is available
   useEffect(() => {
-    if (!songId) return; // Wait for songId to be available
+    if (!songId) return;
     
     fetchSong();
     
@@ -52,10 +52,9 @@ export default function PresentationMode() {
     }
 
     return () => clearTimeout(timer);
-  }, [songId]); // Added songId as dependency
+  }, [songId]);
 
   const fetchSong = async () => {
-    // FIXED: Added safety check
     if (!songId) {
       console.error('No songId provided');
       return;
@@ -105,7 +104,9 @@ export default function PresentationMode() {
     }
   };
 
-  // Rest of your code stays the same...
+  // =============================================
+  // 🔥 MVP: Generate slides - TAMIL ONLY
+  // =============================================
   const generateSlides = (songData) => {
     if (!songData || !songData.lyrics) {
       console.error('No lyrics data available');
@@ -115,78 +116,60 @@ export default function PresentationMode() {
     const slideData = [];
     const linesPerSlide = 2;
     
-    // Safety: Initialize with empty arrays if undefined
+    // Initialize lyrics with empty arrays if undefined
     const lyrics = {
       tamil: songData.lyrics.tamil || [],
-      english: songData.lyrics.english || [],
-      transliteration: songData.lyrics.transliteration || []
+      transliteration: songData.lyrics.transliteration || [],
+      english: songData.lyrics.english || []
     };
 
-    // Title slide
+    // Title slide - Tamil title
     slideData.push({
       type: 'title',
-      content: songData.title
+      content: songData.title // Tamil title
     });
 
-    // Generate lyric slides based on mode
-    if (mode === 'original' && lyrics.tamil.length > 0) {
-      for (let i = 0; i < lyrics.tamil.length; i += linesPerSlide) {
-        const lines = lyrics.tamil.slice(i, i + linesPerSlide);
-        slideData.push({
-          type: 'lyrics',
-          content: lines.map(l => l.text).join('\n')
-        });
-      }
-    } else if (mode === 'transliteration' && lyrics.transliteration.length > 0) {
-      for (let i = 0; i < lyrics.transliteration.length; i += linesPerSlide) {
-        const lines = lyrics.transliteration.slice(i, i + linesPerSlide);
-        slideData.push({
-          type: 'lyrics',
-          content: lines.map(l => l.text).join('\n')
-        });
-      }
-    } else if (mode === 'both') {
-      const maxLength = Math.max(lyrics.tamil.length, lyrics.transliteration.length);
+    // =============================================
+    // 🔥 MVP: TAMIL ONLY - Regardless of mode param
+    // =============================================
+    const tamilLines = lyrics.tamil;
+    
+    if (tamilLines.length === 0) {
+      // Fallback to transliteration if no Tamil available
+      console.log('No Tamil lyrics, falling back to transliteration');
+      const fallbackLines = lyrics.transliteration;
       
-      for (let i = 0; i < maxLength; i += linesPerSlide) {
-        let content = '';
-        
-        for (let j = 0; j < linesPerSlide && (i + j) < maxLength; j++) {
-          const index = i + j;
-          
-          if (lyrics.tamil[index]) {
-            content += lyrics.tamil[index].text + '\n';
-          }
-          if (lyrics.transliteration[index]) {
-            content += lyrics.transliteration[index].text + '\n\n';
-          }
-        }
-        
-        if (content.trim()) {
+      if (fallbackLines.length === 0) {
+        // Last resort: try English
+        const englishLines = lyrics.english;
+        for (let i = 0; i < englishLines.length; i += linesPerSlide) {
+          const lines = englishLines.slice(i, i + linesPerSlide);
           slideData.push({
             type: 'lyrics',
-            content: content.trim()
+            content: lines.map(l => l.text).join('\n')
           });
         }
-      }
-    } else {
-      // Fallback: use whichever is available
-      const availableLyrics = lyrics.tamil.length > 0 ? lyrics.tamil :
-                             lyrics.transliteration.length > 0 ? lyrics.transliteration :
-                             lyrics.english.length > 0 ? lyrics.english : [];
-      
-      if (availableLyrics.length > 0) {
-        for (let i = 0; i < availableLyrics.length; i += linesPerSlide) {
-          const lines = availableLyrics.slice(i, i + linesPerSlide);
+      } else {
+        for (let i = 0; i < fallbackLines.length; i += linesPerSlide) {
+          const lines = fallbackLines.slice(i, i + linesPerSlide);
           slideData.push({
             type: 'lyrics',
             content: lines.map(l => l.text).join('\n')
           });
         }
       }
+    } else {
+      // Primary: Tamil only
+      for (let i = 0; i < tamilLines.length; i += linesPerSlide) {
+        const lines = tamilLines.slice(i, i + linesPerSlide);
+        slideData.push({
+          type: 'lyrics',
+          content: lines.map(l => l.text).join('\n')
+        });
+      }
     }
 
-    // End slide
+    // End slide (blank)
     slideData.push({
       type: 'end',
       content: ''
@@ -195,6 +178,7 @@ export default function PresentationMode() {
     setSlides(slideData);
   };
 
+  // Show controls on mouse move
   useEffect(() => {
     let timeout;
     const handleMouseMove = () => {
@@ -210,6 +194,7 @@ export default function PresentationMode() {
     };
   }, []);
 
+  // Keyboard controls
   useEffect(() => {
     const handleKeyPress = (e) => {
       if (e.key === 'ArrowRight' || e.key === ' ') {
@@ -224,6 +209,12 @@ export default function PresentationMode() {
         setShowGrid(!showGrid);
       } else if (e.key === 'f' || e.key === 'F') {
         toggleFullscreen();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        setCurrentSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        setCurrentSlide(slides.length - 1);
       }
     };
 
@@ -266,7 +257,7 @@ export default function PresentationMode() {
     setTimeout(() => router.back(), 100);
   };
 
-  // FIXED: Better loading state
+  // Loading state
   if (!songId || !song || slides.length === 0) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 to-purple-900 text-white">
@@ -320,19 +311,26 @@ export default function PresentationMode() {
                 <kbd className="bg-white/20 px-4 py-2 rounded-lg font-mono">Space</kbd>
                 <span>Next Slide</span>
               </div>
+              <div className="flex items-center gap-3">
+                <kbd className="bg-white/20 px-4 py-2 rounded-lg font-mono">Home</kbd>
+                <span>First Slide</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <kbd className="bg-white/20 px-4 py-2 rounded-lg font-mono">End</kbd>
+                <span>Last Slide</span>
+              </div>
             </div>
             <p className="text-center mt-6 text-sm opacity-75">This message will disappear in a few seconds...</p>
           </div>
         </div>
       )}
 
-      {/* Main Content */}
-      {/* Main Content - VERTICALLY CENTERED */}
+      {/* Main Content - Vertically Centered */}
       <div className="flex-1 flex items-center justify-center p-12 relative z-10">
         <div className="w-full max-w-7xl">
           {currentSlideData.type === 'title' && (
             <div className="text-center flex items-center justify-center min-h-[60vh]">
-              <h1 className="text-8xl font-bold drop-shadow-2xl" style={{ fontFamily: font }}>
+              <h1 className="text-7xl md:text-8xl font-bold drop-shadow-2xl" style={{ fontFamily: font }}>
                 {currentSlideData.content}
               </h1>
             </div>
@@ -341,10 +339,11 @@ export default function PresentationMode() {
           {currentSlideData.type === 'lyrics' && (
             <div className="text-center flex items-center justify-center min-h-[60vh]">
               <pre 
-                className="text-5xl leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" 
+                className="text-5xl md:text-6xl leading-relaxed font-sans whitespace-pre-wrap drop-shadow-2xl" 
                 style={{ 
                   fontFamily: font, 
-                  fontSize: `${fontSize}pt` 
+                  fontSize: `${fontSize}pt`,
+                  lineHeight: '1.6'
                 }}
               >
                 {currentSlideData.content}
@@ -384,7 +383,7 @@ export default function PresentationMode() {
                   style={{ backgroundColor: bgColor }}
                 >
                   <div className="flex items-center justify-center h-full p-3">
-                    <div className="text-xs line-clamp-3">
+                    <div className="text-sm line-clamp-3 text-center">
                       {slide.content || '•'}
                     </div>
                   </div>
@@ -405,6 +404,7 @@ export default function PresentationMode() {
 
       {/* Controls */}
       <div className={`absolute inset-0 z-20 pointer-events-none transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Previous Button */}
         <button 
           onClick={prevSlide} 
           disabled={currentSlide === 0}
@@ -413,6 +413,7 @@ export default function PresentationMode() {
           <ChevronLeft size={40} />
         </button>
 
+        {/* Center Controls */}
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 pointer-events-auto">
           <button 
             onClick={() => setShowGrid(!showGrid)}
@@ -428,6 +429,7 @@ export default function PresentationMode() {
           </button>
         </div>
 
+        {/* Next Button */}
         <button 
           onClick={nextSlide} 
           disabled={currentSlide === slides.length - 1}
@@ -436,19 +438,32 @@ export default function PresentationMode() {
           <ChevronRight size={40} />
         </button>
 
+        {/* Progress Counter */}
         <div className="absolute top-8 right-8 bg-white/20 backdrop-blur-md px-6 py-4 rounded-xl pointer-events-auto">
           <div className="text-3xl font-bold">
             {currentSlide + 1} / {slides.length}
           </div>
         </div>
 
+        {/* Exit Button */}
         <button 
           onClick={exitPresentation}
-          className="absolute top-8 left-8 bg-red-600/40 hover:bg-red-600/60 backdrop-blur-md px-6 py-3 rounded-full transition pointer-events-auto"
+          className="absolute top-8 left-8 bg-red-600/40 hover:bg-red-600/60 backdrop-blur-md px-6 py-3 rounded-full transition pointer-events-auto flex items-center gap-2"
         >
           <X size={24} />
+          <span className="font-semibold">Exit</span>
         </button>
       </div>
+
+      <style jsx>{`
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { ChevronLeft, ChevronRight, Play, Pause, RotateCcw } from 'lucide-react';
+import { songStorage } from '../../utils/songStorage';
 
 export default function PresenterControl() {
   const router = useRouter();
@@ -48,18 +49,52 @@ export default function PresenterControl() {
   }, []);
 
   const fetchSong = async () => {
+    if (!songId) return;
+  
     try {
+      // Check if it's a custom song
+      if (songId.toString().startsWith('custom-')) {
+        const customSongs = songStorage.getCustomSongs();
+        const customSong = customSongs.find(s => s.id === songId);
+        
+        if (customSong) {
+          setSong(customSong);
+          return;
+        } else {
+          console.error('Custom song not found');
+          return;
+        }
+      }
+    
+      // Fetch from API for default songs
       const response = await fetch(`/api/songs/${songId}`);
-      const data = await response.json();
-      setSong(data);
+      if (response.ok) {
+        const data = await response.json();
+        setSong(data);
+      }
     } catch (error) {
       console.error('Error fetching song:', error);
+      // Fallback: try custom songs
+      const customSongs = songStorage.getCustomSongs();
+      const customSong = customSongs.find(s => s.id === songId);
+      if (customSong) {
+        setSong(customSong);
+      }
     }
   };
 
   const generateSlides = () => {
+    if (!song || !song.lyrics) return;
+  
     const slideData = [];
-    
+  
+    // Safety: Initialize with empty arrays
+    const lyrics = {
+      tamil: song.lyrics.tamil || [],
+      transliteration: song.lyrics.transliteration || [],
+      english: song.lyrics.english || []
+    };
+  
     slideData.push({
       type: 'title',
       content: song.title,
@@ -67,40 +102,47 @@ export default function PresenterControl() {
     });
 
     const linesPerSlide = 2;
-    
-    if (mode === 'original') {
-      for (let i = 0; i < song.lyrics.tamil.length; i += linesPerSlide) {
-        const lines = song.lyrics.tamil.slice(i, i + linesPerSlide);
+  
+    if (mode === 'original' && lyrics.tamil.length > 0) {
+      for (let i = 0; i < lyrics.tamil.length; i += linesPerSlide) {
+        const lines = lyrics.tamil.slice(i, i + linesPerSlide);
         slideData.push({
           type: 'lyrics',
           content: lines.map(l => l.text).join('\n')
         });
       }
-    } else if (mode === 'transliteration') {
-      for (let i = 0; i < song.lyrics.transliteration.length; i += linesPerSlide) {
-        const lines = song.lyrics.transliteration.slice(i, i + linesPerSlide);
+    } else if (mode === 'transliteration' && lyrics.transliteration.length > 0) {
+      for (let i = 0; i < lyrics.transliteration.length; i += linesPerSlide) {
+        const lines = lyrics.transliteration.slice(i, i + linesPerSlide);
         slideData.push({
           type: 'lyrics',
           content: lines.map(l => l.text).join('\n')
         });
       }
     } else if (mode === 'both') {
-      for (let i = 0; i < song.lyrics.tamil.length; i += linesPerSlide) {
+      const maxLength = Math.max(lyrics.tamil.length, lyrics.transliteration.length);
+      for (let i = 0; i < maxLength; i += linesPerSlide) {
         let content = '';
-        for (let j = 0; j < linesPerSlide && (i + j) < song.lyrics.tamil.length; j++) {
-          content += song.lyrics.tamil[i + j].text + '\n';
-          content += song.lyrics.transliteration[i + j].text + '\n\n';
+        for (let j = 0; j < linesPerSlide && (i + j) < maxLength; j++) {
+          if (lyrics.tamil[i + j]) {
+            content += lyrics.tamil[i + j].text + '\n';
+          }
+          if (lyrics.transliteration[i + j]) {
+            content += lyrics.transliteration[i + j].text + '\n\n';
+          }
         }
-        slideData.push({
-          type: 'lyrics',
-          content: content.trim()
-        });
+        if (content.trim()) {
+          slideData.push({
+            type: 'lyrics',
+            content: content.trim()
+          });
+        }
       }
     }
 
     slideData.push({
       type: 'end',
-      content: 'Thank You'
+      content: ''
     });
 
     setSlides(slideData);

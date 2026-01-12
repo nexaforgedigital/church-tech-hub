@@ -494,3 +494,461 @@ body {
     padding: 0.75rem !important;
   }
 }
+
+/* ============================================ */
+/* PRINT STYLES - For Clean Printed Documents */
+/* ============================================ */
+
+@media print {
+  /* Reset background for printing */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide non-essential elements */
+  nav,
+  footer,
+  header,
+  .no-print,
+  button,
+  .gradient-button,
+  .modern-card:hover,
+  [role="navigation"],
+  .fixed,
+  .sticky {
+    display: none !important;
+  }
+
+  /* Reset backgrounds for better printing */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Remove shadows and borders for cleaner look */
+  .shadow-xl,
+  .shadow-2xl,
+  .shadow-lg,
+  .shadow-md,
+  .shadow-sm {
+    box-shadow: none !important;
+  }
+
+  /* Simplify gradients */
+  .bg-gradient-to-r,
+  .bg-gradient-to-br,
+  .bg-gradient-to-bl,
+  .gradient-primary,
+  .gradient-secondary {
+    background: #f5f5f5 !important;
+    color: black !important;
+  }
+
+  /* Ensure text is readable */
+  h1, h2, h3, h4, h5, h6 {
+    color: black !important;
+    page-break-after: avoid !important;
+  }
+
+  p, li, td, th {
+    color: black !important;
+  }
+
+  /* Links show URL */
+  a[href]:after {
+    content: " (" attr(href) ")";
+    font-size: 10pt;
+    color: #666;
+  }
+
+  a[href^="#"]:after,
+  a[href^="javascript"]:after {
+    content: "";
+  }
+
+  /* Page breaks */
+  .page-break-before {
+    page-break-before: always !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+  }
+
+  .avoid-break {
+    page-break-inside: avoid !important;
+  }
+
+  /* Service items print nicely */
+  .service-item,
+  .song-card {
+    page-break-inside: avoid !important;
+    border: 1px solid #ddd !important;
+    margin-bottom: 10pt !important;
+    padding: 10pt !important;
+    background: white !important;
+  }
+
+  /* Table styling for print */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 8pt !important;
+    text-align: left !important;
+  }
+
+  th {
+    background: #f0f0f0 !important;
+    font-weight: bold !important;
+  }
+
+  /* Optimize images */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Container adjustments */
+  .container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide modals and overlays */
+  .modal,
+  .overlay,
+  [role="dialog"],
+  .backdrop-blur-sm,
+  .backdrop-blur-md {
+    display: none !important;
+  }
+
+  /* Worship planner specific */
+  .worship-planner-header {
+    background: white !important;
+    color: black !important;
+    padding: 20pt 0 !important;
+  }
+
+  /* Print header for service */
+  .print-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 20pt;
+    padding-bottom: 10pt;
+    border-bottom: 2pt solid black;
+  }
+
+  .print-header h1 {
+    font-size: 18pt !important;
+    margin: 0 !important;
+  }
+
+  .print-header p {
+    font-size: 10pt !important;
+    color: #666 !important;
+    margin: 5pt 0 0 0 !important;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  /* First page different margin */
+  @page :first {
+    margin-top: 2cm;
+  }
+}
+
+/* ============================================ */
+/* ENHANCED MOBILE RESPONSIVENESS */
+/* ============================================ */
+
+/* Base mobile improvements */
+@media (max-width: 640px) {
+  /* Larger touch targets */
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  /* Better font sizes */
+  body {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+  }
+
+  h1 {
+    font-size: 1.75rem !important;
+    line-height: 1.2 !important;
+  }
+
+  h2 {
+    font-size: 1.5rem !important;
+  }
+
+  h3 {
+    font-size: 1.25rem !important;
+  }
+
+  /* Stack buttons on mobile */
+  .flex-wrap {
+    flex-direction: column !important;
+  }
+
+  .flex-wrap > button,
+  .flex-wrap > a {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Better spacing */
+  .container {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .p-6 {
+    padding: 1rem !important;
+  }
+
+  .p-8 {
+    padding: 1.25rem !important;
+  }
+
+  .py-16 {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+  }
+
+  /* Cards full width */
+  .max-w-6xl,
+  .max-w-4xl,
+  .max-w-2xl {
+    max-width: 100% !important;
+  }
+
+  /* Better modal on mobile */
+  .modal,
+  [role="dialog"] {
+    margin: 0 !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+  }
+
+  /* Service items stack better */
+  .service-item .flex {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .service-item .flex-1 {
+    margin-bottom: 0.5rem !important;
+  }
+
+  /* Action buttons row */
+  .service-item .flex.items-center.gap-1 {
+    flex-direction: row !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+  }
+}
+
+/* Tablet improvements */
+@media (min-width: 641px) and (max-width: 1024px) {
+  /* Two column grid on tablets */
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .grid-cols-3,
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Moderate spacing */
+  .container {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+}
+
+/* Worship Planner Mobile Specific */
+@media (max-width: 768px) {
+  /* Header adjustments */
+  .worship-planner-header h1 {
+    font-size: 1.5rem !important;
+  }
+
+  .worship-planner-header .text-6xl {
+    font-size: 1.75rem !important;
+  }
+
+  .worship-planner-header .text-2xl {
+    font-size: 1rem !important;
+  }
+
+  .worship-planner-header .text-lg {
+    font-size: 0.875rem !important;
+  }
+
+  /* Icon size in header */
+  .worship-planner-header svg {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .worship-planner-header .p-6 {
+    padding: 1rem !important;
+  }
+
+  /* Action buttons grid */
+  .action-buttons {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+  }
+
+  .action-buttons button {
+    font-size: 0.875rem !important;
+    padding: 0.75rem !important;
+  }
+
+  .action-buttons button svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  /* Clear All button full width */
+  .action-buttons button:last-child {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* Service item card mobile */
+  .service-item-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+  }
+
+  .service-item-card .item-controls {
+    display: flex !important;
+    justify-content: space-between !important;
+    border-top: 1px solid rgba(0,0,0,0.1) !important;
+    padding-top: 0.75rem !important;
+    margin-top: 0.5rem !important;
+  }
+
+  /* Present buttons */
+  .present-buttons .grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Song picker modal */
+  .song-picker-modal {
+    max-height: 80vh !important;
+  }
+
+  .song-picker-modal input {
+    font-size: 16px !important; /* Prevents zoom */
+  }
+
+  /* Settings modal */
+  .settings-modal select,
+  .settings-modal input {
+    font-size: 16px !important;
+  }
+}
+
+/* Better scrolling on mobile */
+@media (max-width: 768px) {
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+  }
+
+  /* Smooth momentum scrolling */
+  .scroll-smooth {
+    scroll-behavior: smooth !important;
+  }
+}
+
+/* Safe area insets for notched phones */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(1rem, env(safe-area-inset-left)) !important;
+    padding-right: max(1rem, env(safe-area-inset-right)) !important;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* Fix for iOS input zoom */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Better focus states on mobile */
+@media (hover: none) and (pointer: coarse) {
+  /* Remove hover effects on touch devices */
+  .hover\:scale-105:hover,
+  .hover-scale:hover {
+    transform: none !important;
+  }
+
+  /* Add active states instead */
+  button:active,
+  a:active {
+    transform: scale(0.98) !important;
+    opacity: 0.9 !important;
+  }
+
+  /* Better tap highlight */
+  * {
+    -webkit-tap-highlight-color: rgba(102, 126, 234, 0.2) !important;
+  }
+}
+
+/* Landscape mobile improvements */
+@media (max-width: 896px) and (orientation: landscape) {
+  /* Reduce header height */
+  .worship-planner-header {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .worship-planner-header h1 {
+    font-size: 1.25rem !important;
+  }
+
+  /* Hide decorative elements */
+  .worship-planner-header .opacity-10 {
+    display: none !important;
+  }
+
+  /* Compact service items */
+  .service-item {
+    padding: 0.75rem !important;
+  }
+}
