@@ -22,6 +22,17 @@ const noLayoutPages = [
   '/admin/batch-add',
   '/admin/songs',
   '/admin/settings',
+  '/admin',
+  '/admin/preview',
+  '/admin/structure',
+  '/admin/youtube-finder',
+  '/admin/chords',
+  '/admin/statistics',
+  '/admin/merge',
+  '/admin/import-files',
+  '/admin/categories',
+  '/admin/backup',
+  '/admin/requests',
 ];
 
 function MyApp({ Component, pageProps }) {
